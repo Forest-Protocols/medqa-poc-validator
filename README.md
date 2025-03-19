@@ -4,7 +4,7 @@ This repository contains a template that Protocol Owners should customize accord
 
 Validators are daemon processes written for specific Protocols that control the quality of Services in an periodic and ongoing fashion. They execute a set of predefined tests on Offers in the Protocol and rank Providers that published those Offers on their quality in comparison to other Providers. This process is crucial for Providers as the emissions they receive are proportional to their ranks.
 
-Adding strong validation support to your Protocol not only increases your emissions but also acts as a competitive advantage over Protocol without it by  enhancing the consistency and trustworthiness of your Protocol to end customers.
+Adding strong validation support to your Protocol not only increases your emissions but also acts as a competitive advantage over Protocols without it by enhancing the consistency and trustworthiness of your Protocol's Services to end customers.
 
 # Quickstart
 
