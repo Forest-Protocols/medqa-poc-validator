@@ -479,7 +479,7 @@ export class Validator {
       }
       try {
         // Retrieve details of the Resource
-        /* const response = await this.pipe.send(operatorAddress, {
+        const response = await this.pipe.send(operatorAddress, {
           method: PipeMethod.GET,
           path: "/resources",
           params: {
@@ -495,17 +495,7 @@ export class Validator {
         if (response.code != PipeResponseCode.OK) {
           throw new PipeError(response.code, response.body);
         }
-        const resource = response?.body; */
-
-        const agreement = await this.protocol.getAgreement(agreementId);
-        const offer = await this.protocol.getOffer(agreement.offerId);
-        const provider = await this.registry.getActor(offer.ownerAddr);
-
-        const resource = {
-          deploymentStatus: DeploymentStatus.Running,
-          providerId: provider!.id,
-          id: agreementId,
-        } as any;
+        const resource = response?.body;
 
         if (resource?.deploymentStatus == DeploymentStatus.Running) {
           this.logger.info(
