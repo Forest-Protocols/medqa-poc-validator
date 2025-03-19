@@ -1,0 +1,53 @@
+{
+  "name": "validator-template",
+  "version": "1.0.0",
+  "description": "Base Validator template that Protocol Owners need to extend",
+  "homepage": "https://github.com/Forest-Protocols/validator-template#readme",
+  "bugs": {
+    "url": "https://github.com/Forest-Protocols/validator-template/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Forest-Protocols/validator-template.git"
+  },
+  "license": "MIT",
+  "author": "Forest Network Development Team",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "lint": "tsc && eslint",
+    "dev": "tsup --sourcemap --silent --onSuccess 'tsc-alias -p tsconfig.json -f && node dist/index.js'",
+    "watch": "tsup --silent --watch --onSuccess 'tsc-alias -p tsconfig.json -f && node dist/index.js'",
+    "start": "node dist/index.js",
+    "build": "tsup --onSuccess 'tsc-alias -p tsconfig.json -f'",
+    "clean": "rm -rf dist",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.8",
+    "@types/pg": "^8.11.11",
+    "drizzle-kit": "^0.30.5",
+    "eslint": "^9.21.0",
+    "tsc-alias": "^1.8.11",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.38.3",
+    "@forest-protocols/sdk": "^1.37.0",
+    "ansis": "^3.17.0",
+    "async-mutex": "^0.5.0",
+    "drizzle-orm": "^0.40.0",
+    "nanoid": "^5.1.2",
+    "pg": "^8.13.3",
+    "uuid": "^11.1.0",
+    "viem": "^2.23.10",
+    "winston": "^3.17.0",
+    "zod": "^3.24.2"
+  }
+}

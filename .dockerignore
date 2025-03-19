@@ -1,0 +1,9 @@
+node_modules
+.vscode
+.env*
+dist
+.git
+README.md
+.prettierrc
+.prettierignore
+volumes
