@@ -5,8 +5,7 @@ If you want to start validating services in this Protocol follow the steps below
 1. [Register in the Network](#1-register-in-the-network),
 2. [Register in this Protocol](#2-register-in-this-protocol),
 3. [Clone target Protocol's Validator Daemon](#3-clone-target-protocols-validator-daemon),
-4. [Fork and Implement This Repository](#4-fork-and-implement-this-repository),
-5. [Run the Validator Daemon](#5-run-the-validator-daemon).
+4. [Run the Validator Daemon](#4-run-the-validator-daemon).
 
 ### Step-by-step instructions
 
@@ -62,7 +61,7 @@ forest validator register-in \
 
 Now clone the target Protocol's Validator daemon code. To find that, you can contact with the Protocol Owner.
 
-#### 5. Run the Validator Daemon
+#### 4. Run the Validator Daemon
 
 You can run the daemon process with or without a container. First of all, copy `.env.example` as `.env`:
 
@@ -72,7 +71,7 @@ cp .env.example .env
 
 Then read the `.env` file carefully and configure it according to your needs.
 
-##### 5.1 Without a Container
+##### 4.1 Without a Container
 
 > Ensure you have a running PostgreSQL database before proceeding.
 
@@ -85,7 +84,7 @@ npm run db:migrate
 npm run start
 ```
 
-##### 5.2 With a Container
+##### 4.2 With a Container
 
 If you prefer to use containers, build the container image and run it with Docker Compose. First, update the `DATABASE_URL` host to point to the database container:
 
