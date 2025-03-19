@@ -1,33 +1,36 @@
 # Validator Template
 
-This repository contains the template that should be customized by Protocol Owners according to their Protocol definitions. Protocols which have Validators get more emissions than the others.
+This repository contains a template that Protocol Owners should customize according to their Protocol requirements on quality validation. It's not required of all Protocols to have validation in place, however Protocols with Validators receive higher emissions than those without.
 
-Validators are daemon processes that are written for specific Protocol. Their purpose is executing some pre-defined tests on the services that are providing by Providers within that Protocol. Validators rank those Providers based on their service quality. Based on those ranks Providers get higher emissions.
+Validators are daemon processes written for specific Protocols that control the quality of Services in an periodic and ongoing fashion. They execute a set of predefined tests on Offers in the Protocol and rank Providers that published those Offers on their quality in comparison to other Providers. This process is crucial for Providers as the emissions they receive are proportional to their ranks.
 
-Adding Validator support to your Protocol also increase your emissions. Because Validators increase the consistency and trustworthy of your Protocol.
+Adding strong validation support to your Protocol not only increases your emissions but also acts as a competitive advantage over Protocol without it by  enhancing the consistency and trustworthiness of your Protocol to end customers.
 
 # Quickstart
 
 > This tutorial is for Protocol Owners
 
-After you've done with [Provider Template](https://github.com/Forest-Protocols/provider-template) follow up the guide below to start to implement your Validator daemon
+After completing the [Provider Template](https://github.com/Forest-Protocols/provider-template) setup, follow the guide below to implement your Validator daemon.
 
 Index:
-
-- [Fork and edit the repository](#fork-and-edit-the-repository),
+- [Fork and edit the repository](#fork-and-edit-the-repository)
 
 ## Fork and edit the repository
 
-The working diagram of Validator daemon is shown below:
+The diagram of a working Validator daemon is shown below:
 ![diagram](docs/images/validator-diagram.png)
 
-The daemon have only one validation definition and they can be running simultaneously. That one validation definition can have bunch of tests inside of it.
+The daemon has a single validation definition that can run multiple tests simultaneously. While there is only one validation definition, it can contain multiple tests within it.
 
-Since each Protocol has its own type of service, Validation process and Tests should be customized for each Protocol. First Fork this repository and clone it locally. Then open `src/protocol/validation.ts` file. You'll see a class called `Validation`. This class includes the general actions that are shared between "Tests". Each Test has its own logic in order to test something specific.
+Since each Protocol offers unique services, the Validation process and Tests must be customized accordingly. To begin:
 
-In this file the most important part is `calculateScore` method which calculates the total score of a single Validation session based on the Test results. Based on those scores, Providers will get higher emissions. So you need to implement this function wisely. The score should be a positive integer value. The range of score is depend on the implementation. Just be sure that good service will get high score and bad service get low.
+1. Fork this repository and clone it locally
+2. Open `src/protocol/validation.ts`
+3. Locate the `Validation` class, which includes general actions shared between "Tests". Each Test on the other hand should be specialized in validating a different metric / aspect of the Service.
 
-As an example in this guide we will implement a Validation session and write speed test for a PostgreSQL Protocol (we assume that we already registered one). Take this example as a reference and implement your own logic according to your Protocol.
+The most critical component is the `calculateScore` method, which computes the total score for a single Validation session based on Test results. These scores determine Provider emissions, so implement this function carefully. The score should be a positive integer - higher scores indicate better service quality, while lower scores indicate poorer performance.
+
+As an example, we'll implement a Validation session with a write speed test for a PostgreSQL Protocol (we assume that we already registered one). Use this as a reference when implementing your own Protocol-specific logic.
 
 Check the code below;
 
@@ -113,7 +116,7 @@ export class Validation extends BaseValidation<ResourceDetails> {
 }
 ```
 
-Then create another file called `src/protocol/tests/WriteSpeedTest.ts`. This will include our actual test class implementation:
+Then create a file called `src/protocol/tests/WriteSpeedTest.ts`. This will include our actual test logic implementation:
 
 ```typescript
 import { TestResult } from "@/core/types";
@@ -183,9 +186,9 @@ export class WriteSpeedTest extends AbstractTest<
 }
 ```
 
-`WriteSpeedTest` is a "Automated Performance Test". That means the code itself can do the test. But if your Protocol service cannot be tested with that approach, in case the outputs/results must be evaluated by real humans (e.g image generation, translation, video generation), you can use `HumanEvaluationTest` instead of `AbstractTest`.
+The `WriteSpeedTest` visible above is of an "Automated Performance Test" type. This type of tests is suitable for a) direct performance measurements (e.g., response time in milliseconds) or b) when a dataset of known ground truths (inputs and correspodning outputs) is available (e.g., classification tasks). But if your Protocol service cannot be tested with that approach, for instance in cases where the outputs/results must be evaluated by humans (e.g image generation, translation, video generation), you can use `HumanEvaluationTest` instead of `AbstractTest` class to derive your test class.
 
-In human evaluation test, once the test is started, it fetches the outputs from the service and save those outputs under `data/evaluations` directory as JSON files. Human evaluators need to submit their scores for the generated outputs within those files before the defined time runs out.
+In `HumanEvaluationTest`, once the test is started, the daemon fetches the outputs from the tested Service and saves them under `data/evaluations` directory as JSON files. Human evaluators need to submit their manual evaluation scores for the generated outputs and the files need to be updated before the defined time runs out so that the daemon can read the file and use human evaluations as scores reported to the blockchain.
 
 A human evaluation test for a translation service would look like this:
 
@@ -261,6 +264,6 @@ export class ExampleHumanEvaluation extends HumanEvaluationTest<
 }
 ```
 
-Once you are done with your implementation of test(s), you are good to go! You can commit your changes, push and publish it so people can download it and participate your Protocol as a Validator.
+Once you are done with your implementation of test(s), you are good to go! You can commit, push and publish your changes. Actors interested in participating in your Prtocool as Validators will now be able to download the daemon code and run it.
 
-Also you can replace this README file with `docs/become-a-validator.md` so people will see that file when they visit your Validator Daemon's GitHub repository.
+You can also replace this README file with `docs/become-a-validator.md` that includes instructions for potential Validators. They will then see that file when they visit your Validator Daemon's GitHub repository.
