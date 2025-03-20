@@ -14,7 +14,7 @@ services:
     build:
       context: .
     env_file:
-      - .env.docker
+      - .env
     volumes:
       - ./data:/daemon/data
     restart: unless-stopped
