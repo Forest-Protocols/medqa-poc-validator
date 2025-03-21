@@ -1,14 +1,17 @@
 import { TestResult } from "@/core/types";
-import { AbstractTest } from "@/base/AbstractTest";
 import { Validation } from "../validation";
 import { randomInteger } from "@/utils/random-integer";
 import { sleep } from "@/utils/sleep";
+import { PerformanceTest } from "@/base/PerformanceTest";
 
 export type ExampleTestResult = {
   num: number;
 };
 
-export class ExampleTest extends AbstractTest<ExampleTestResult, Validation> {
+export class ExampleTest extends PerformanceTest<
+  ExampleTestResult,
+  Validation
+> {
   async execute(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     validation: Validation
