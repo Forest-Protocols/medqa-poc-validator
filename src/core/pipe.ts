@@ -1,8 +1,8 @@
-import { XMTPPipe } from "@forest-protocols/sdk";
+import { XMTPv3Pipe } from "@forest-protocols/sdk";
 
 /**
  * Operator pipes in this daemon
  */
 export const pipes: {
-  [operatorAddr: string]: XMTPPipe;
+  [operatorAddr: string]: XMTPv3Pipe;
 } = {};

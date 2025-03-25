@@ -4,14 +4,14 @@ import { Resource, TestResult, ValidationResult } from "@/core/types";
 import { colorKeyword } from "@/core/color";
 import { ensureError } from "@/utils/ensure-error";
 import { logger as mainLogger } from "@/core/logger";
-import { XMTPPipe } from "@forest-protocols/sdk";
+import { XMTPv3Pipe } from "@forest-protocols/sdk";
 import { config } from "@/core/config";
 
 export class BaseValidation<T extends Record<string, unknown> = {}> {
   protected logger!: Logger;
   protected sessionId!: string;
   protected validatorTag!: string;
-  protected pipe!: XMTPPipe;
+  protected pipe!: XMTPv3Pipe;
   protected readonly tests: AbstractTestConstructor[] = [];
 
   private _resource!: Resource;
@@ -51,7 +51,7 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     validation._resource = resource;
     validation.sessionId = sessionId;
 
-    validation.pipe = new XMTPPipe(
+    validation.pipe = new XMTPv3Pipe(
       config.validatorConfigurations[validatorTag].operatorWalletPrivateKey
     );
     // Disable console.info to get rid out of XMTP dev message

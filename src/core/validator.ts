@@ -16,7 +16,7 @@ import {
   validateBodyOrParams,
   ValidatorDetails,
   writeContract,
-  XMTPPipe,
+  XMTPv3Pipe,
   Token,
 } from "@forest-protocols/sdk";
 import {
@@ -58,7 +58,7 @@ export class Validator {
   registry!: Registry;
   protocol!: Protocol;
   token!: Token;
-  pipe!: XMTPPipe;
+  pipe!: XMTPv3Pipe;
   details!: ValidatorDetails;
   actorInfo!: Actor;
   usdc!: GetContractReturnType<typeof erc20Abi, PublicClient | WalletClient>;
@@ -567,7 +567,7 @@ export class Validator {
   private async initPipe(operatorPrivateKey: Hex) {
     // If there is no Pipe instance for this operator, instantiate one
     if (!pipes[this.actorInfo.operatorAddr]) {
-      this.pipe = new XMTPPipe(operatorPrivateKey);
+      this.pipe = new XMTPv3Pipe(operatorPrivateKey);
 
       // Disable `console.info` to get rid out of XMTP dev message
       const consoleInfo = console.info;
