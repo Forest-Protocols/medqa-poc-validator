@@ -1,4 +1,4 @@
-import { Protocol, TerminationError } from "@forest-protocols/sdk";
+import { Protocol, Status, TerminationError } from "@forest-protocols/sdk";
 import { config } from "./config";
 import { ensureError } from "@/utils/ensure-error";
 import { rpcClient } from "@/core/client";
@@ -29,7 +29,16 @@ async function pickupRandomOffer(protocol: Protocol) {
     return;
   }
 
-  return offers[randomInteger(0, offers.length - 1)];
+  // If we can't find even one active Offer,
+  if (offers.find((o) => o.status === Status.Active) == undefined) {
+    logger.warning(`There is no active Offer in this Protocol yet`);
+    return;
+  }
+
+  // Filter active Offers
+  const activeOffers = offers.filter((o) => o.status === Status.Active);
+
+  return activeOffers[randomInteger(0, activeOffers.length - 1)];
 }
 
 export async function setupValidationInterval() {
@@ -48,6 +57,8 @@ export async function setupValidationInterval() {
       const offer = await pickupRandomOffer(protocol);
 
       if (offer === undefined) {
+        // No Offer is found, wait a little bit
+        await sleep(10_000);
         continue;
       }
 
