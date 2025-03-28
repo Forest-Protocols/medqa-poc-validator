@@ -29,6 +29,8 @@ function logInfo(message: string, options?: any) {
 }
 
 function logDebug(message: string, options?: any) {
+  // It generates too much output so disable it temporarily
+  return;
   if (config.LISTEN_BLOCKCHAIN) {
     logger.debug(message, options);
   }
