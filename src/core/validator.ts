@@ -424,8 +424,6 @@ export class Validator {
         );
 
         await writeContract(rpcClient, request, {
-          retryDelay: 2_000,
-          timeout: 25_000,
           onContractWrite: (hash) => {
             this.logger.debug(
               `USDC Allowance TX hash: ${colorHex(hash)}`,
