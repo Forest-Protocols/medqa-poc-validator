@@ -404,10 +404,9 @@ export class Validator {
 
       // Check allowance and increase if it's not enough
       if (ptAllowance < initialDeposit) {
-        const amount = initialDeposit - ptAllowance;
-        const formattedAmount = formatUnits(amount, DECIMALS.USDC);
+        const formattedAmount = formatUnits(initialDeposit, DECIMALS.USDC);
         this.logger.info(
-          `USDC allowance is increasing (${formattedAmount} USDC)`,
+          `USDC allowance is setting (to ${formattedAmount} USDC)`,
           loggerOptions
         );
 
@@ -418,7 +417,7 @@ export class Validator {
               address: this.usdc.address,
               functionName: "approve",
               account: this.account,
-              args: [config.PROTOCOL_ADDRESS, amount],
+              args: [config.PROTOCOL_ADDRESS, initialDeposit],
             }),
           { signal: abortController.signal }
         );
