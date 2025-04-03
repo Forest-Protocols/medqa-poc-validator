@@ -21,6 +21,8 @@ async function main() {
     type: ThreadMessageType.ValidationCompleted,
     data: result,
   });
+
+  await validation.close();
 }
 
 main();

@@ -18,6 +18,7 @@ import {
   writeContract,
   XMTPv3Pipe,
   Token,
+  TimeoutError,
 } from "@forest-protocols/sdk";
 import {
   Account,
@@ -511,7 +512,8 @@ export class Validator {
             )}: ${error.stack}`,
             loggerOptions
           );
-        } else {
+          // Ignore timeout errors since we have our timeout
+        } else if (!(error instanceof TimeoutError)) {
           throw err;
         }
       }
@@ -564,13 +566,11 @@ export class Validator {
   private async initPipe(operatorPrivateKey: Hex) {
     // If there is no Pipe instance for this operator, instantiate one
     if (!pipes[this.actorInfo.operatorAddr]) {
-      this.pipe = new XMTPv3Pipe(operatorPrivateKey);
+      this.pipe = new XMTPv3Pipe(operatorPrivateKey, {
+        signal: abortController.signal,
+      });
 
-      // Disable `console.info` to get rid out of XMTP dev message
-      const consoleInfo = console.info;
-      console.info = () => {};
       await this.pipe.init(config.CHAIN == "optimism" ? "production" : "dev");
-      console.info = consoleInfo;
 
       // Setup routes
       this.pipe.route(PipeMethod.GET, "/details", async (req) => {

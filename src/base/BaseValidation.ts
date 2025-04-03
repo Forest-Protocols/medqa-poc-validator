@@ -54,11 +54,8 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     validation.pipe = new XMTPv3Pipe(
       config.validatorConfigurations[validatorTag].operatorWalletPrivateKey
     );
-    // Disable console.info to get rid out of XMTP dev message
-    const consoleInfo = console.info;
-    console.info = () => {};
+
     await validation.pipe.init("dev");
-    console.info = consoleInfo;
 
     return validation;
   }
@@ -100,5 +97,12 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
       score: await this.calculateScore(testResults),
       testResults,
     };
+  }
+
+  /**
+   * Finalizes the validation process
+   */
+  async close() {
+    await this.pipe.close();
   }
 }
