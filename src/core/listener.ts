@@ -54,11 +54,15 @@ export async function listenToBlockchain() {
     registryContractAddress: config.REGISTRY_ADDRESS,
   });
 
-  try {
-    let currentBlock = await rpcClient.getBlockNumber();
-    let isRevealWindowNotified = false;
+  let currentBlock: bigint | undefined;
+  let isRevealWindowNotified = false;
 
-    while (!abortController.signal.aborted) {
+  while (!abortController.signal.aborted) {
+    try {
+      if (currentBlock === undefined) {
+        currentBlock = await rpcClient.getBlockNumber();
+      }
+
       // Get block or wait until it is available
       const block =
         (await getBlock(currentBlock)) || (await waitBlock(currentBlock));
@@ -207,11 +211,11 @@ export async function listenToBlockchain() {
       }
 
       currentBlock++;
-    }
-  } catch (err: unknown) {
-    const error = ensureError(err);
-    if (!isTermination(error)) {
-      logger.error(`Error: ${error.stack}`);
+    } catch (err: unknown) {
+      const error = ensureError(err);
+      if (!isTermination(error)) {
+        logger.error(`Error: ${error.stack}`);
+      }
     }
   }
 
