@@ -568,6 +568,7 @@ export class Validator {
     if (!pipes[this.actorInfo.operatorAddr]) {
       this.pipe = new XMTPv3Pipe(operatorPrivateKey, {
         signal: abortController.signal,
+        revokeOtherInstallations: true,
       });
 
       await this.pipe.init(config.CHAIN == "optimism" ? "production" : "dev");
