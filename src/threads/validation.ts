@@ -1,6 +1,6 @@
 import { logger as mainLogger } from "@/core/logger";
 import { Validation } from "@/protocol/validation";
-import { ThreadMessageType } from "@/core/types";
+import { ThreadMessage } from "@/core/types";
 import { parentPort, workerData } from "worker_threads";
 
 const validatorTag = workerData.validatorTag;
@@ -18,7 +18,7 @@ async function main() {
   logger.info(`Score is ${result.score}`);
 
   parentPort?.postMessage({
-    type: ThreadMessageType.ValidationCompleted,
+    type: ThreadMessage.ValidationCompleted,
     data: result,
   });
 

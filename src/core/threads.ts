@@ -7,7 +7,11 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { Worker } from "worker_threads";
 import { customAlphabet } from "nanoid";
-import { ThreadMessageType, ValidationResult } from "@/core/types";
+import {
+  ThreadMessage,
+  ThreadMessageObject,
+  ValidationResult,
+} from "@/core/types";
 import { DB } from "@/database/client";
 import { Mutex } from "async-mutex";
 import { abortController, isTermination } from "@/core/signal";
@@ -107,33 +111,57 @@ export async function startValidation(validator: Validator, offerId: number) {
 
       worker.on("error", (err) => rej(err));
 
-      worker.on(
-        "message",
-        async (message: { type: ThreadMessageType; data: any }) => {
-          if (message.type == ThreadMessageType.ValidationCompleted) {
-            const result: ValidationResult = message.data;
+      worker.on("message", async (message: ThreadMessageObject) => {
+        if (message.type == ThreadMessage.ValidationCompleted) {
+          const result: ValidationResult = message.data;
 
-            // Only save them if there is any results
-            if (result.testResults.length > 0) {
-              await DB.saveValidation(
-                {
-                  agreementId: agreementId!, // At this point Agreement is already created
-                  offerId,
-                  sessionId,
-                  startedAt,
-                  score: message.data.score,
-                  providerId: resource.providerId,
-                  validatorId: validator.actorInfo.id,
-                },
-                message.data.testResults
-              );
-            }
+          // Only save them if there is any results
+          if (result.testResults.length > 0) {
+            await DB.saveValidation(
+              {
+                agreementId: agreementId!, // At this point Agreement is already created
+                offerId,
+                sessionId,
+                startedAt,
+                score: message.data.score,
+                providerId: resource.providerId,
+                validatorId: validator.actorInfo.id,
+              },
+              message.data.testResults
+            );
+          }
 
-            // Check validations to be committed, asynchronously
-            validator.commitValidations();
+          // Check validations to be committed, asynchronously
+          validator.commitValidations();
+        }
+
+        // If a Pipe request made form the thread, forward it to the actual
+        // Pipe instance from the Validator class.
+        if (message.type === ThreadMessage.PipeSend) {
+          try {
+            const response = await validator.pipe.send(
+              message.data.to,
+              message.data.request
+            );
+
+            worker.postMessage({
+              type: ThreadMessage.PipeResponse,
+              data: {
+                id: message.data.id,
+                response,
+              },
+            });
+          } catch (err) {
+            worker.postMessage({
+              type: ThreadMessage.PipeError,
+              data: {
+                id: message.data.id,
+                error: JSON.parse(JSON.stringify(err)),
+              },
+            });
           }
         }
-      );
+      });
     });
   } catch (err: unknown) {
     const error = ensureError(err);

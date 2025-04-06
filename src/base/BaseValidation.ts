@@ -4,14 +4,13 @@ import { Resource, TestResult, ValidationResult } from "@/core/types";
 import { colorKeyword } from "@/core/color";
 import { ensureError } from "@/utils/ensure-error";
 import { logger as mainLogger } from "@/core/logger";
-import { XMTPv3Pipe } from "@forest-protocols/sdk";
-import { config } from "@/core/config";
+import { ThreadPipe } from "@/core/thread-pipe";
 
 export class BaseValidation<T extends Record<string, unknown> = {}> {
   protected logger!: Logger;
   protected sessionId!: string;
   protected validatorTag!: string;
-  protected pipe!: XMTPv3Pipe;
+  protected pipe!: ThreadPipe;
   protected readonly tests: AbstractTestConstructor[] = [];
 
   private _resource!: Resource;
@@ -51,11 +50,9 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     validation._resource = resource;
     validation.sessionId = sessionId;
 
-    validation.pipe = new XMTPv3Pipe(
-      config.validatorConfigurations[validatorTag].operatorWalletPrivateKey
-    );
+    validation.pipe = new ThreadPipe();
 
-    await validation.pipe.init("dev");
+    await validation.pipe.init();
 
     return validation;
   }
