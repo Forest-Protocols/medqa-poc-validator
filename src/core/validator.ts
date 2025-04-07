@@ -50,6 +50,7 @@ import { abortController, isTermination } from "./signal";
 import { ResourceIsNotOnlineError } from "@/errors/ResourceIsNotOnlineError";
 import { chunked } from "@/utils/array";
 import { sleep } from "@/utils/sleep";
+import { join } from "path";
 
 export class Validator {
   logger!: Logger;
@@ -568,6 +569,14 @@ export class Validator {
     if (!pipes[this.actorInfo.operatorAddr]) {
       this.pipe = new XMTPv3Pipe(operatorPrivateKey, {
         signal: abortController.signal,
+        dbPath: join(
+          process.cwd(),
+          "data",
+          `db-${this.actorInfo.operatorAddr}.db`
+        ),
+
+        // Doesn't matter what it is as long as it is something that we can use in the next client initialization
+        encryptionKey: this.actorInfo.operatorAddr,
       });
 
       await this.pipe.init(config.CHAIN == "optimism" ? "production" : "dev");
