@@ -4,6 +4,7 @@
 # Run migrations
 npm run db:migrate
 
+# Exit if the migration is failed
 if [ $? -ne 0 ]; then
     exit 1
 fi
