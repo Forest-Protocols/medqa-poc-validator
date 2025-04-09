@@ -59,7 +59,7 @@ forest validator register-in \
 
 #### 3. Clone target Protocol's Validator Daemon
 
-Now clone the target Protocol's Validator daemon code. To find that, you can contact with the Protocol Owner.
+Now clone the target Protocol's Validator daemon code. To find that, you can contact the Protocol Owner.
 
 #### 4. Run the Validator Daemon
 
@@ -106,6 +106,6 @@ Now run the compose file:
 docker compose up # Add "-d" to run in detached mode
 ```
 
-If you have enabled `GRACEFUL_SHUTDOWN` option, use `docker compose down -t -1` command to close containers. This command prevent Docker to force close the daemon before gracefully close opened Agreements.
+If you have enabled the `GRACEFUL_SHUTDOWN` option, use `docker compose down -t -1` command to close containers. This command prevents Docker to force close the daemon before it gracefully closes opened Agreements.
 
 That's all folks!

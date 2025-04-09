@@ -1,7 +1,7 @@
 import { MaybePromise } from "@/core/types";
 
 /**
- * Divides the given array into chunks which has the given length.
+ * Divides the given array into chunks which have the given length.
  * Calls `callback` for each chunk. If the callback is async, all chunks
  * will be executed sequentially.
  */
