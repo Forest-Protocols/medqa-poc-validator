@@ -1,8 +1,8 @@
 # Validator Template
 
-This repository contains a template that Protocol Owners should customize according to their Protocol requirements on quality validation. It's not required of all Protocols to have validation in place, however Protocols with Validators receive higher emissions than those without.
+This repository contains a template that Protocol Owners should customize according to their Protocol requirements on quality validation. Not all Protocols are required to have validation in place, however Protocols with Validators receive higher emissions than those without.
 
-Validators are daemon processes written for specific Protocols that control the quality of Services in an periodic and ongoing fashion. They execute a set of predefined tests on Offers in the Protocol and rank Providers that published those Offers on their quality in comparison to other Providers. This process is crucial for Providers as the emissions they receive are proportional to their ranks.
+Validators are daemon processes written for specific Protocols that control the quality of Services in a periodic and ongoing fashion. They execute a set of predefined tests on Offers in the Protocol and rank Providers that published those Offers on their quality in comparison to other Providers. This process is crucial for Providers as the emissions they receive are proportional to their ranks.
 
 Adding strong validation support to your Protocol not only increases your emissions but also acts as a competitive advantage over Protocols without it by enhancing the consistency and trustworthiness of your Protocol's Services to end customers.
 
@@ -186,7 +186,7 @@ export class WriteSpeedTest extends AbstractTest<
 }
 ```
 
-The `WriteSpeedTest` visible above is of an "Automated Performance Test" type. This type of tests is suitable for a) direct performance measurements (e.g., response time in milliseconds) or b) when a dataset of known ground truths (inputs and correspodning outputs) is available (e.g., classification tasks). But if your Protocol service cannot be tested with that approach, for instance in cases where the outputs/results must be evaluated by humans (e.g image generation, translation, video generation), you can use `HumanEvaluationTest` instead of `AbstractTest` class to derive your test class.
+The `WriteSpeedTest` visible above is of an "Automated Performance Test" type. This type of tests is suitable for a) direct performance measurements (e.g., response time in milliseconds) or b) when a dataset of known ground truths (inputs and corresponding outputs) is available (e.g., classification tasks). But if your Protocol service cannot be tested with that approach, for instance in cases where the outputs/results must be evaluated by humans (e.g image generation, translation, video generation), you can use `HumanEvaluationTest` instead of `AbstractTest` class to derive your test class.
 
 In `HumanEvaluationTest`, once the test is started, the daemon fetches the outputs from the tested Service and saves them under `data/evaluations` directory as JSON files. Human evaluators need to submit their manual evaluation scores for the generated outputs and the files need to be updated before the defined time runs out so that the daemon can read the file and use human evaluations as scores reported to the blockchain.
 
@@ -264,6 +264,6 @@ export class ExampleHumanEvaluation extends HumanEvaluationTest<
 }
 ```
 
-Once you are done with your implementation of test(s), you are good to go! You can commit, push and publish your changes. Actors interested in participating in your Prtocool as Validators will now be able to download the daemon code and run it.
+Once you are done with your implementation of test(s), you are good to go! You can commit, push and publish your changes. Actors interested in participating in your Protocol as Validators will now be able to download the daemon code and run it.
 
 You can also replace this README file with `docs/become-a-validator.md` that includes instructions for potential Validators. They will then see that file when they visit your Validator Daemon's GitHub repository.
