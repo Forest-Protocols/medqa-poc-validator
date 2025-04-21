@@ -470,13 +470,17 @@ export class Validator {
 
     while (!abortController.signal.aborted) {
       const currentTs = Date.now();
-      const passedSeconds = Math.floor((currentTs - startTs) / 1000);
+      const passedTime = currentTs - startTs;
 
       // If Resource took much time to be online than we expected, cancel the validation.
-      if (passedSeconds >= config.TIMEOUT_RESOURCE_TO_BE_ONLINE) {
+      if (passedTime >= config.TIMEOUT_RESOURCE_TO_BE_ONLINE) {
         throw new ResourceIsNotOnlineError(agreementId);
       }
       try {
+        this.logger.debug(
+          `Sending get Resource request to ${colorHex(operatorAddress)}`
+        );
+
         // Retrieve details of the Resource
         const response = await this.pipe.send(operatorAddress, {
           method: PipeMethod.GET,
@@ -490,6 +494,10 @@ export class Validator {
           },
           timeout: 15 * 1000,
         });
+
+        this.logger.debug(
+          `Get Resource request has been sent to ${colorHex(operatorAddress)}`
+        );
 
         if (response.code != PipeResponseCode.OK) {
           throw new PipeError(response.code, response.body);
