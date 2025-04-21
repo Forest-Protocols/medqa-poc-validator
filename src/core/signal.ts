@@ -12,7 +12,7 @@ export const abortController = new AbortController();
       if (config.GRACEFUL_SHUTDOWN) {
         console.error(
           yellow(
-            "[WARNING] Termination signal received. Finalizing validations."
+            "[WARNING] Termination signal received. Finalizing current work."
           )
         );
         process.exitCode = 1;
@@ -33,6 +33,10 @@ export const abortController = new AbortController();
   })
 );
 
+/**
+ * Recursively checks if the `err` or any of its causes
+ * is a termination error.
+ */
 export function isTermination(err: Error | unknown) {
   const error = ensureError(err);
   let cause: Error | unknown | undefined = error;
