@@ -146,11 +146,11 @@ export class Validator {
   }
 
   async closeEpoch() {
-    await this.commitRevealQueue.add(() => this.slasher.closeEpoch());
+    await this.commitRevealQueue.queue(() => this.slasher.closeEpoch());
   }
 
   async emitRewards(epochEndBlockNumber: bigint) {
-    await this.commitRevealQueue.add(() =>
+    await this.commitRevealQueue.queue(() =>
       this.token.emitRewards(epochEndBlockNumber)
     );
   }
@@ -159,7 +159,7 @@ export class Validator {
    * Commits validations to the blockchain
    */
   async commitValidations() {
-    await this.commitRevealQueue.add(async () => {
+    await this.commitRevealQueue.queue(async () => {
       try {
         // If the last Epoch is closed that means we are in the new Epoch's Commit Window
         // so we can commit new results to the blockchain
@@ -264,7 +264,7 @@ export class Validator {
   }
 
   async revealResults() {
-    await this.commitRevealQueue.add(async () => {
+    await this.commitRevealQueue.queue(async () => {
       try {
         const unrevealedValidations = await DB.getUnrevealedValidations(
           this.actorInfo.id
@@ -371,7 +371,7 @@ export class Validator {
    * @returns An object that includes Agreement ID and Operator address of the Provider
    */
   async enterAgreement(offerId: number, sessionId = "") {
-    return await this.agreementQueue.add(async () => {
+    return await this.agreementQueue.queue(async () => {
       this.checkAbort();
       const loggerOptions = this.createLoggerOptions(sessionId);
       const offer = await this.protocol.getOffer(offerId);
@@ -529,7 +529,7 @@ export class Validator {
    * Closes the given Agreement
    */
   async closeAgreement(agreementId: number, sessionId = "") {
-    await this.agreementQueue.add(async () => {
+    await this.agreementQueue.queue(async () => {
       this.logger.info(
         `Closing Agreement ${colorNumber(agreementId)}`,
         this.createLoggerOptions(sessionId)

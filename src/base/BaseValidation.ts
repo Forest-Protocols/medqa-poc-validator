@@ -5,12 +5,15 @@ import { colorKeyword } from "@/core/color";
 import { ensureError } from "@/utils/ensure-error";
 import { logger as mainLogger } from "@/core/logger";
 import { ThreadPipe } from "@/core/thread-pipe";
+import { config } from "@/core/config";
+import { AbstractPipe } from "@forest-protocols/sdk";
+import { isTermination } from "@/core/signal";
 
 export class BaseValidation<T extends Record<string, unknown> = {}> {
   protected logger!: Logger;
   protected sessionId!: string;
   protected validatorTag!: string;
-  protected pipe!: ThreadPipe;
+  protected pipe!: AbstractPipe;
   protected readonly tests: AbstractTestConstructor[] = [];
 
   private _resource!: Resource;
@@ -50,9 +53,15 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     validation._resource = resource;
     validation.sessionId = sessionId;
 
-    validation.pipe = new ThreadPipe();
-
-    await validation.pipe.init();
+    // If we are using multithreading, then use Thread Pipe
+    // to forward Pipe requests to the main thread. Otherwise
+    // we can directly use the Validator's Pipe
+    if (config.USE_MULTITHREADING) {
+      validation.pipe = new ThreadPipe();
+      await validation.pipe.init();
+    } else {
+      validation.pipe = config.validators[validatorTag].pipe;
+    }
 
     return validation;
   }
@@ -84,6 +93,11 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
 
         this.logger.info(`${testName} completed successfully`);
       } catch (err: unknown) {
+        // If this is the termination error, re-throw it, no need to continue
+        if (isTermination(err)) {
+          throw err;
+        }
+
         const error = ensureError(err);
         this.logger.error(`Error while executing ${testName}: ${error.stack}`);
       }
@@ -100,6 +114,11 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
    * Finalizes the validation process
    */
   async close() {
-    await this.pipe.close();
+    // If the Validation was running in its own thread,
+    // then we can close the pipe. Otherwise it points
+    // to the validator's pipe which is we shouldn't close.
+    if (config.USE_MULTITHREADING) {
+      await this.pipe.close();
+    }
   }
 }

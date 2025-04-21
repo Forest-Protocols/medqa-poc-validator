@@ -2,10 +2,15 @@ import { TerminationError } from "@forest-protocols/sdk";
 import { abortController } from "./signal";
 
 export class PromiseQueue {
-  private currentPromise = Promise.resolve();
-  private queue: (() => Promise<any>)[] = [];
+  private concurrency: number;
+  private promises: (() => Promise<any>)[] = [];
+  private activePromises = 0;
 
-  async add<T = unknown>(
+  constructor(options?: { concurrency?: number }) {
+    this.concurrency = options?.concurrency || 1;
+  }
+
+  async queue<T = unknown>(
     fn: () => Promise<T>,
     ignoreTermination?: boolean
   ): Promise<T> {
@@ -14,23 +19,22 @@ export class PromiseQueue {
     }
 
     return new Promise<T>((resolve, reject) => {
-      const task = async () => {
-        try {
-          return resolve(await fn());
-        } catch (error) {
-          reject(error);
-        }
-      };
+      const task = () => fn().then(resolve).catch(reject);
 
-      this.queue.push(task);
-
-      // Chain the next execution onto the existing promise chain
-      this.currentPromise = this.currentPromise.then(() => {
-        if (this.queue.length > 0) {
-          const nextTask = this.queue.shift();
-          return nextTask?.();
-        }
-      });
+      // Add new promise to the queue and dequeue the next item
+      this.promises.push(task);
+      this.dequeue();
     });
+  }
+
+  private async dequeue() {
+    if (this.activePromises >= this.concurrency) {
+      return;
+    }
+
+    if (this.promises.length > 0) {
+      const nextTask = this.promises.shift();
+      return nextTask?.();
+    }
   }
 }

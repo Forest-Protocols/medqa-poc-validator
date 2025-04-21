@@ -4,9 +4,10 @@ import { ensureError } from "@/utils/ensure-error";
 import { rpcClient } from "@/core/client";
 import { abortController, isTermination } from "./signal";
 import { logger } from "@/core/logger";
-import { startValidation, validationSessionsCount } from "./threads";
+import { startValidation, activeValidations } from "./threads";
 import { randomInteger } from "@/utils/random-integer";
 import { sleep } from "@/utils/sleep";
+import { readableTime } from "@/utils/readable-time";
 
 function getInterval() {
   if (typeof config.VALIDATE_INTERVAL === "object") {
@@ -62,8 +63,8 @@ export async function setupValidationInterval() {
         continue;
       }
 
-      if (validationSessionsCount >= config.MAX_CONCURRENT_VALIDATION) {
-        // There is no space for the validation, just skip it
+      if (activeValidations >= config.MAX_CONCURRENT_VALIDATION) {
+        // There is no space for the new validation, skip it
         continue;
       }
 
@@ -79,7 +80,10 @@ export async function setupValidationInterval() {
       const error = ensureError(err);
       logger.error(`Error while choosing an Offer: ${error.stack}`);
     }
-    await sleep(getInterval());
+    const interval = getInterval();
+
+    logger.info(`Next validation will start in ${readableTime(interval)}`);
+    await sleep(interval);
   }
 
   throw new TerminationError();

@@ -183,6 +183,10 @@ function parseEnvVariables() {
         .string()
         .default("true")
         .transform((value) => value === "true"),
+      USE_MULTITHREADING: z
+        .string()
+        .default("true")
+        .transform((value) => value === "true"),
       MAX_VALIDATION_TO_COMMIT: z.coerce.number().default(10),
       RPC_RATE_LIMIT: z.coerce.number().default(20),
       RPC_RATE_LIMIT_TIME_WINDOW: z

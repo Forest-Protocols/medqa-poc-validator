@@ -8,7 +8,7 @@ import { listenToBlockchain } from "./core/listener";
 import { ensureError } from "./utils/ensure-error";
 import { colorHex } from "./core/color";
 import { setupValidationInterval } from "./core/interval";
-import { validationSessionsCount } from "./core/threads";
+import { activeValidations } from "./core/threads";
 import { abortController, isTermination } from "./core/signal";
 
 async function loadDetailFiles() {
@@ -75,7 +75,7 @@ async function main() {
   }
 
   logger.debug("Main function is over");
-  if (validationSessionsCount == 0 && abortController.signal.aborted) {
+  if (activeValidations == 0 && abortController.signal.aborted) {
     logger.warning("Exit...");
     process.exit();
   }
