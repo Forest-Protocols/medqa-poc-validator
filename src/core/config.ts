@@ -191,6 +191,7 @@ function parseEnvVariables() {
       RPC_RATE_LIMIT: z.coerce.number().default(20),
       RPC_RATE_LIMIT_TIME_WINDOW: z
         .string()
+        .default("5s")
         .transform((value, ctx) => parseTime(value, ctx)),
       REGISTRY_ADDRESS: addressSchema.optional(),
       SLASHER_ADDRESS: addressSchema.optional(),
