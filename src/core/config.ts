@@ -8,6 +8,7 @@ import {
   getContractAddressByChain,
   privateKeySchema,
   setGlobalRateLimit,
+  setGlobalRateLimitTimeWindow,
   USDCAddress,
 } from "@forest-protocols/sdk";
 import { Address } from "viem";
@@ -184,6 +185,9 @@ function parseEnvVariables() {
         .transform((value) => value === "true"),
       MAX_VALIDATION_TO_COMMIT: z.coerce.number().default(10),
       RPC_RATE_LIMIT: z.coerce.number().default(20),
+      RPC_RATE_LIMIT_TIME_WINDOW: z
+        .string()
+        .transform((value, ctx) => parseTime(value, ctx)),
       REGISTRY_ADDRESS: addressSchema.optional(),
       SLASHER_ADDRESS: addressSchema.optional(),
       TOKEN_ADDRESS: addressSchema.optional(),
@@ -237,11 +241,12 @@ function parseEnvVariables() {
 const env = parseEnvVariables();
 
 setGlobalRateLimit(env.RPC_RATE_LIMIT);
+setGlobalRateLimitTimeWindow(env.RPC_RATE_LIMIT_TIME_WINDOW);
 
 export const config = {
   ...env,
 
-  // This must be initialized but since it Validator creation is an
+  // This must be initialized but since the "Validator creation" is an
   // async process, it should be done somewhere else (check index.ts)
   validators: {} as Record<string, Validator>,
 };
