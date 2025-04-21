@@ -1,6 +1,8 @@
-import { createLogger, format, transports } from "winston";
+import winston, { createLogger, format, transports } from "winston";
 import { config } from "./config";
 import * as ansis from "ansis";
+import { ensureError } from "@/utils/ensure-error";
+import { isTermination } from "./signal";
 
 type ColorName = "red" | "yellow" | "green" | "magenta" | "cyan";
 type LogLevel = "error" | "warning" | "info" | "debug";
@@ -49,3 +51,18 @@ export const logger = createLogger({
     }),
   ],
 });
+
+/**
+ * Logs the given err with the given logger.
+ * Ensures that `err` is not a termination error.
+ */
+export function logError(params: {
+  err: unknown;
+  logger: winston.Logger;
+  prefix?: string;
+}) {
+  if (isTermination(params.err)) return;
+
+  const error = ensureError(params.err);
+  params.logger.error(`${params.prefix || "Error: "}${error.stack}`);
+}
