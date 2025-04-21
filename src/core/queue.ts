@@ -7,7 +7,11 @@ export class PromiseQueue {
   private activePromises = 0;
 
   constructor(options?: { concurrency?: number }) {
-    this.concurrency = options?.concurrency || 1;
+    if (options?.concurrency === 0) {
+      this.concurrency = 0;
+    } else {
+      this.concurrency = options?.concurrency || 1;
+    }
   }
 
   async queue<T = unknown>(
@@ -28,7 +32,7 @@ export class PromiseQueue {
   }
 
   private async dequeue() {
-    if (this.activePromises >= this.concurrency) {
+    if (this.concurrency > 0 && this.activePromises >= this.concurrency) {
       return;
     }
 
