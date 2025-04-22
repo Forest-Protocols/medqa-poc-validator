@@ -4,7 +4,7 @@ import { config } from "@/core/config";
 import { logger as mainLogger } from "@/core/logger";
 import { ProtocolABI, Slasher, TerminationError } from "@forest-protocols/sdk";
 import { parseEventLogs } from "viem";
-import { startValidation } from "./threads";
+import { startValidation } from "./sessions";
 import { ensureError } from "@/utils/ensure-error";
 import { abortController, isTermination } from "./signal";
 import { sleep } from "@/utils/sleep";

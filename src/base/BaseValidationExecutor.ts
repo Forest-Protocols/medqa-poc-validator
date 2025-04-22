@@ -2,7 +2,7 @@ import { Offer, Protocol, Status } from "@forest-protocols/sdk";
 import { logError, logger as mainLogger } from "@/core/logger";
 import { rpcClient } from "@/core/client";
 import { config } from "@/core/config";
-import { startValidation } from "@/core/threads";
+import { startValidation } from "@/core/sessions";
 import { abortController, isTermination } from "@/core/signal";
 import { yellow } from "ansis";
 

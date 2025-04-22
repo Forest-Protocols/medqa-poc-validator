@@ -1,7 +1,7 @@
 import { BaseValidationExecutor } from "@/base/BaseValidationExecutor";
 import { config } from "@/core/config";
 import { logError } from "@/core/logger";
-import { activeValidations } from "@/core/threads";
+import { activeValidations } from "@/core/sessions";
 import { randomInteger } from "@/utils/random-integer";
 import { readableTime } from "@/utils/readable-time";
 import { sleep } from "@/utils/sleep";

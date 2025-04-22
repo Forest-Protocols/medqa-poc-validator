@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, rmSync, statSync } from "fs";
 import { DB } from "./database/client";
 import { Validator } from "./core/validator";
 import { colorHex } from "./core/color";
-import { activeValidations } from "./core/threads";
+import { activeValidations } from "./core/sessions";
 import { abortController } from "./core/signal";
 import { IntervalValidationExecutor } from "./executors/IntervalValidationExecutor";
 import { ProtocolValidationExecutor } from "./protocol/executor";

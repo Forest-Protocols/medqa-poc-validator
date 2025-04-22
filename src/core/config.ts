@@ -12,17 +12,13 @@ import {
   USDCAddress,
 } from "@forest-protocols/sdk";
 import { Address } from "viem";
-import { isMainThread } from "worker_threads";
 import { Validator } from "./validator";
 import { ValidatorConfiguration } from "./types";
 import dotenv from "@dotenvx/dotenvx";
 import { readableTime } from "@/utils/readable-time";
 import { parseTime } from "@/utils/parse-time";
 
-if (isMainThread) {
-  dotenv.config({ ignore: ["MISSING_ENV_FILE"] });
-}
-
+dotenv.config({ ignore: ["MISSING_ENV_FILE"] });
 const nonEmptyStringSchema = z.string().nonempty("Shouldn't be empty");
 
 function parseValidatorConfigurations() {
@@ -85,9 +81,7 @@ function parseValidatorConfigurations() {
 }
 
 function parseEnvVariables() {
-  if (isMainThread) {
-    console.log(blue.bold("[INFO] Parsing environment variables"));
-  }
+  console.log(blue.bold("[INFO] Parsing environment variables"));
 
   const environmentSchema = z
     .object({
@@ -108,7 +102,7 @@ function parseEnvVariables() {
       LISTEN_BLOCKCHAIN: z.string().transform((value) => {
         const result = value === "true";
 
-        if (result && isMainThread) {
+        if (result) {
           console.log(blue.bold("[INFO] Blockchain listener is enabled"));
         }
 
@@ -130,15 +124,13 @@ function parseEnvVariables() {
               return z.NEVER;
             }
 
-            if (isMainThread) {
-              console.log(
-                blue.bold(
-                  `[INFO] Validation interval is enabled for between: ${readableTime(
-                    rangeStart
-                  )}-${readableTime(rangeEnd)}`
-                )
-              );
-            }
+            console.log(
+              blue.bold(
+                `[INFO] Validation interval is enabled for between: ${readableTime(
+                  rangeStart
+                )}-${readableTime(rangeEnd)}`
+              )
+            );
 
             return {
               start: rangeStart,
@@ -153,15 +145,13 @@ function parseEnvVariables() {
               return z.NEVER;
             }
 
-            if (isMainThread) {
-              console.log(
-                blue.bold(
-                  `[INFO] Validation interval is enabled for: ${readableTime(
-                    result
-                  )}`
-                )
-              );
-            }
+            console.log(
+              blue.bold(
+                `[INFO] Validation interval is enabled for: ${readableTime(
+                  result
+                )}`
+              )
+            );
             return result;
           }
 
@@ -180,10 +170,6 @@ function parseEnvVariables() {
         .default("false")
         .transform((value) => value === "true"),
       GRACEFUL_SHUTDOWN: z
-        .string()
-        .default("true")
-        .transform((value) => value === "true"),
-      USE_MULTITHREADING: z
         .string()
         .default("true")
         .transform((value) => value === "true"),

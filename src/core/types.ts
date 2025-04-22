@@ -1,21 +1,6 @@
 import { DeploymentStatus } from "@forest-protocols/sdk";
 import { Address, Hex } from "viem";
 
-export const ThreadMessage = {
-  ValidationCompleted: "VALIDATION_COMPLETED",
-  PipeSend: "PIPE_SEND",
-  PipeError: "PIPE_ERROR",
-  PipeResponse: "PIPE_RESPONSE",
-} as const;
-
-export type ThreadMessageType =
-  (typeof ThreadMessage)[keyof typeof ThreadMessage];
-
-export type ThreadMessageObject<T = any> = {
-  type: ThreadMessageType;
-  data: T;
-};
-
 export type ValidatorConfiguration = {
   validatorWalletPrivateKey: Hex;
   billingWalletPrivateKey: Hex;

@@ -13,6 +13,7 @@ Adding strong validation support to your Protocol not only increases your emissi
 After completing the [Provider Template](https://github.com/Forest-Protocols/provider-template) setup, follow the guide below to implement your Validator daemon.
 
 Index:
+
 - [Fork and edit the repository](#fork-and-edit-the-repository)
 
 ## Fork and edit the repository
@@ -54,8 +55,6 @@ export type ResourceDetails = {
 
 /**
  * Define the general necessary actions for your tests.
- *
- * NOTE: Each validation run in its own thread.
  */
 export class Validation extends BaseValidation<ResourceDetails> {
   // We need to add all of Test implementations into this array.

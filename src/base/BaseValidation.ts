@@ -4,7 +4,6 @@ import { Resource, TestResult, ValidationResult } from "@/core/types";
 import { colorKeyword } from "@/core/color";
 import { ensureError } from "@/utils/ensure-error";
 import { logger as mainLogger } from "@/core/logger";
-import { ThreadPipe } from "@/core/thread-pipe";
 import { config } from "@/core/config";
 import { AbstractPipe } from "@forest-protocols/sdk";
 import { isTermination } from "@/core/signal";
@@ -52,16 +51,7 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     validation.validatorTag = validatorTag;
     validation._resource = resource;
     validation.sessionId = sessionId;
-
-    // If we are using multithreading, then use Thread Pipe
-    // to forward Pipe requests to the main thread. Otherwise
-    // we can directly use the Validator's Pipe
-    if (config.USE_MULTITHREADING) {
-      validation.pipe = new ThreadPipe();
-      await validation.pipe.init();
-    } else {
-      validation.pipe = config.validators[validatorTag].pipe;
-    }
+    validation.pipe = config.validators[validatorTag].pipe;
 
     return validation;
   }
@@ -108,17 +98,5 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
       score: await this.calculateScore(testResults),
       testResults,
     };
-  }
-
-  /**
-   * Finalizes the validation process
-   */
-  async close() {
-    // If the Validation was running in its own thread,
-    // then we can close the pipe. Otherwise it points
-    // to the validator's pipe which is we shouldn't close.
-    if (config.USE_MULTITHREADING) {
-      await this.pipe.close();
-    }
   }
 }

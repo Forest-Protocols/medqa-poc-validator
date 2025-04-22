@@ -7,8 +7,6 @@ import { ExampleHumanEvaluation } from "./tests/ExampleHumanEvaluation";
 
 /**
  * Define the general necessary actions for your tests.
- *
- * NOTE: All of the validation related stuff will be executed in its own Thread.
  */
 export class Validation extends BaseValidation {
   override readonly tests: AbstractTestConstructor[] = [
