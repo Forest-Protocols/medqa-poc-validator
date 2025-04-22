@@ -65,11 +65,7 @@ export class Validator {
   actorInfo!: Actor;
   usdc!: GetContractReturnType<typeof erc20Abi, PublicClient | WalletClient>;
 
-  // nonce is already managed by Viem but it doesn't enough
-  // for enter Agreement process. That's why we simply split
-  // Agreement and result related stuff into two different queue.
-  private commitRevealQueue = new PromiseQueue();
-  private agreementQueue = new PromiseQueue();
+  private rpcQueue = new PromiseQueue();
 
   /**
    * Creates a new Validator instance for the given tag.
@@ -146,11 +142,11 @@ export class Validator {
   }
 
   async closeEpoch() {
-    await this.commitRevealQueue.queue(() => this.slasher.closeEpoch());
+    await this.rpcQueue.queue(() => this.slasher.closeEpoch());
   }
 
   async emitRewards(epochEndBlockNumber: bigint) {
-    await this.commitRevealQueue.queue(() =>
+    await this.rpcQueue.queue(() =>
       this.token.emitRewards(epochEndBlockNumber)
     );
   }
@@ -159,7 +155,7 @@ export class Validator {
    * Commits validations to the blockchain
    */
   async commitValidations() {
-    await this.commitRevealQueue.queue(async () => {
+    await this.rpcQueue.queue(async () => {
       try {
         // If the last Epoch is closed that means we are in the new Epoch's Commit Window
         // so we can commit new results to the blockchain
@@ -264,7 +260,7 @@ export class Validator {
   }
 
   async revealResults() {
-    await this.commitRevealQueue.queue(async () => {
+    await this.rpcQueue.queue(async () => {
       try {
         const unrevealedValidations = await DB.getUnrevealedValidations(
           this.actorInfo.id
@@ -371,7 +367,7 @@ export class Validator {
    * @returns An object that includes Agreement ID and Operator address of the Provider
    */
   async enterAgreement(offerId: number, sessionId = "") {
-    return await this.agreementQueue.queue(async () => {
+    return await this.rpcQueue.queue(async () => {
       this.checkAbort();
       const loggerOptions = this.createLoggerOptions(sessionId);
       const offer = await this.protocol.getOffer(offerId);
@@ -478,7 +474,9 @@ export class Validator {
       }
       try {
         this.logger.debug(
-          `Sending get Resource request to ${colorHex(operatorAddress)}`
+          `Sending get Resource request for ${colorNumber(
+            agreementId
+          )} to ${colorHex(operatorAddress)}`
         );
 
         // Retrieve details of the Resource
@@ -496,7 +494,9 @@ export class Validator {
         });
 
         this.logger.debug(
-          `Get Resource request has been sent to ${colorHex(operatorAddress)}`
+          `Get Resource request  for ${colorNumber(
+            agreementId
+          )} has been sent to ${colorHex(operatorAddress)}`
         );
 
         if (response.code != PipeResponseCode.OK) {
@@ -537,7 +537,7 @@ export class Validator {
    * Closes the given Agreement
    */
   async closeAgreement(agreementId: number, sessionId = "") {
-    await this.agreementQueue.queue(async () => {
+    await this.rpcQueue.queue(async () => {
       this.logger.info(
         `Closing Agreement ${colorNumber(agreementId)}`,
         this.createLoggerOptions(sessionId)

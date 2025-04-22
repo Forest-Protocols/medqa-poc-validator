@@ -279,7 +279,7 @@ export async function startValidation(validator: Validator, offerId: number) {
 
     // If abort signal has been received and this is the last validation session then exit
     if (abortController.signal.aborted && activeValidations == 0) {
-      mainLogger.warning("Exit...");
+      mainLogger.warning("See ya...");
       process.exit();
     }
   }
