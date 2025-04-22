@@ -23,22 +23,31 @@ export class PromiseQueue {
     }
 
     return new Promise<T>((resolve, reject) => {
-      const task = () => fn().then(resolve).catch(reject);
+      const task = () => {
+        this.activePromises++;
+        return fn()
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            this.activePromises--;
+            this.drain(); // Trigger draining the queue
+          });
+      };
 
-      // Add new promise to the queue and dequeue the next item
+      // Add new promise to the queue and trigger draining the queue
       this.promises.push(task);
-      this.dequeue();
+      this.drain();
     });
   }
 
-  private async dequeue() {
-    if (this.concurrency > 0 && this.activePromises >= this.concurrency) {
-      return;
-    }
-
-    if (this.promises.length > 0) {
-      const nextTask = this.promises.shift();
-      return nextTask?.();
+  private async drain() {
+    while (
+      this.promises.length > 0 &&
+      // If the concurrency is enabled, check if there is enough slot for the next execution.
+      (this.concurrency === 0 || this.activePromises < this.concurrency)
+    ) {
+      const next = this.promises.shift();
+      next?.();
     }
   }
 }
