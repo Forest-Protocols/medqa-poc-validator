@@ -2,7 +2,7 @@ import winston, { createLogger, format, transports } from "winston";
 import { config } from "./config";
 import * as ansis from "ansis";
 import { ensureError } from "@/utils/ensure-error";
-import { isTermination } from "./signal";
+import { isTermination } from "@/utils/is-termination";
 
 type ColorName = "red" | "yellow" | "green" | "magenta" | "cyan";
 type LogLevel = "error" | "warning" | "info" | "debug";

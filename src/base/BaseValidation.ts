@@ -1,12 +1,12 @@
 import { Logger } from "winston";
 import { AbstractTestConstructor } from "./AbstractTest";
-import { Resource, TestResult, ValidationResult } from "@/core/types";
+import { Resource, TestResult } from "@/core/types";
 import { colorKeyword } from "@/core/color";
 import { ensureError } from "@/utils/ensure-error";
 import { logger as mainLogger } from "@/core/logger";
 import { config } from "@/core/config";
 import { AbstractPipe } from "@forest-protocols/sdk";
-import { isTermination } from "@/core/signal";
+import { isTermination } from "@/utils/is-termination";
 
 export class BaseValidation<T extends Record<string, unknown> = {}> {
   protected logger!: Logger;
@@ -58,10 +58,9 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
 
   /**
    * Starts the validation, executes all of the
-   * defined Tests and returns score of
-   * the Provider based on the Test results
+   * defined Tests and their results.
    */
-  async start(): Promise<ValidationResult> {
+  async start(): Promise<TestResult[]> {
     const testResults: TestResult[] = [];
 
     const errorHandler = (methodName: string, err: unknown) => {
@@ -83,7 +82,7 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
 
         this.logger.info(`${testName} completed successfully`);
       } catch (err: unknown) {
-        // If this is the termination error, re-throw it, no need to continue
+        // If this is the termination error, re-throw it and interrupt the process, no need to continue
         if (isTermination(err)) {
           throw err;
         }
@@ -94,9 +93,6 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
     }
     await this.onFinish().catch((err) => errorHandler("onFinish", err));
 
-    return {
-      score: await this.calculateScore(testResults),
-      testResults,
-    };
+    return testResults;
   }
 }

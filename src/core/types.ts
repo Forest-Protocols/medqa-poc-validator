@@ -12,6 +12,16 @@ export type ValidationResult = {
   testResults: TestResult[];
 };
 
+export type ValidationSessionInfo = {
+  startedAt: Date;
+  sessionId: string;
+  offerId: number;
+  providerId: number;
+  agreementId: number;
+  validatorId: number;
+  testResults: TestResult[];
+};
+
 export type StructuredTestResults =
   | Record<string, unknown>
   | Array<Record<string, unknown>>

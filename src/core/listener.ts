@@ -1,57 +1,20 @@
 import { rpcClient } from "@/core/client";
 import { colorHex, colorNumber } from "@/core/color";
 import { config } from "@/core/config";
-import { logger as mainLogger } from "@/core/logger";
-import { ProtocolABI, Slasher, TerminationError } from "@forest-protocols/sdk";
-import { parseEventLogs } from "viem";
-import { startValidation } from "./sessions";
+import { logError, logger as mainLogger } from "@/core/logger";
+import { Slasher } from "@forest-protocols/sdk";
 import { ensureError } from "@/utils/ensure-error";
-import { abortController, isTermination } from "./signal";
+import { abortController } from "./signal";
 import { sleep } from "@/utils/sleep";
 
 const logger = mainLogger.child({ context: "Blockchain" });
-
-async function getBlock(num: bigint) {
-  try {
-    return await rpcClient.getBlock({
-      blockNumber: num,
-      includeTransactions: true,
-    });
-  } catch {
-    // logger.debug(err.stack);
-  }
-}
-
-function logInfo(message: string, options?: any) {
-  if (config.LISTEN_BLOCKCHAIN) {
-    logger.info(message, options);
-  }
-}
-
-function logDebug(message: string, options?: any) {
-  // It generates too much output so disable it temporarily
-  return;
-  if (config.LISTEN_BLOCKCHAIN) {
-    logger.debug(message, options);
-  }
-}
-
-async function waitBlock(num: bigint) {
-  logDebug(`Waiting for block ${colorNumber(num)}`);
-  while (!abortController.signal.aborted) {
-    const block = await getBlock(num);
-
-    if (block) return block;
-    await sleep(2000);
-  }
-  throw new TerminationError();
-}
 
 export async function listenToBlockchain() {
   const slasher = new Slasher({
     client: rpcClient,
     address: config.SLASHER_ADDRESS,
     registryContractAddress: config.REGISTRY_ADDRESS,
+    signal: abortController.signal,
   });
 
   let currentBlock: bigint | undefined;
@@ -59,68 +22,7 @@ export async function listenToBlockchain() {
 
   while (!abortController.signal.aborted) {
     try {
-      if (currentBlock === undefined) {
-        currentBlock = await rpcClient.getBlockNumber();
-      }
-
-      // Get block or wait until it is available
-      const block =
-        (await getBlock(currentBlock)) || (await waitBlock(currentBlock));
-
-      // If the listening enabled, then process the TXs
-      if (config.LISTEN_BLOCKCHAIN) {
-        // Check if block has TXs inside
-        if (block.transactions.length == 0) {
-          logDebug(
-            `No transactions found in block ${colorNumber(
-              currentBlock
-            )}, skipping...`
-          );
-
-          currentBlock++;
-          continue;
-        }
-
-        // Check TXs
-        logDebug(`Processing block ${colorNumber(block.number)}`);
-        for (const tx of block.transactions) {
-          // If this TX is not belong to the Protocol that we are looking for, skip it.
-          if (
-            !tx.to ||
-            tx.to.toLowerCase() != config.PROTOCOL_ADDRESS.toLowerCase()
-          ) {
-            continue;
-          }
-
-          const receipt = await rpcClient.getTransactionReceipt({
-            hash: tx.hash,
-          });
-
-          if (receipt.status == "reverted") {
-            logDebug(`TX (${colorHex(tx.hash)}) was reverted, skipping...`);
-            continue;
-          }
-
-          const events = parseEventLogs({
-            abi: ProtocolABI,
-            logs: receipt.logs,
-          });
-
-          for (const event of events) {
-            if (event.eventName == "OfferRegistered") {
-              logInfo(
-                `New Offer registered in the Protocol, ID ${colorNumber(
-                  event.args.id
-                )}`
-              );
-              // Start validation process for each of the configured Validators
-              for (const [, validator] of Object.entries(config.validators)) {
-                startValidation(validator, event.args.id);
-              }
-            }
-          }
-        }
-      }
+      currentBlock = await rpcClient.getBlockNumber();
 
       const currentEpochEndBlock = await slasher.getCurrentEpochEndBlock();
       const revealWindowEnd =
@@ -130,7 +32,7 @@ export async function listenToBlockchain() {
       if (currentBlock > revealWindowEnd && config.CLOSE_EPOCH) {
         let epochClosed = false;
 
-        // TODO: Which Validator should have this responsibility?
+        // TODO: Which Validator should have this responsibility? Closing epoch and emitting rewards?
 
         // Pick up first Validator to close the Epoch
         const validatorTags = Object.keys(config.validators);
@@ -144,7 +46,9 @@ export async function listenToBlockchain() {
           await validator.closeEpoch();
 
           logger.info(
-            `Epoch is closed by Validator "${validator.tag}" (${colorHex(
+            `The epoch ${colorNumber(
+              currentEpochEndBlock
+            )} is closed by Validator "${validator.tag}" (${colorHex(
               validator.actorInfo.ownerAddr
             )})`
           );
@@ -152,9 +56,9 @@ export async function listenToBlockchain() {
         } catch (err: unknown) {
           const error = ensureError(err);
           logger.warning(
-            `Error while trying to close Epoch (${colorNumber(
-              currentEpochEndBlock
-            )}): ${error.stack}`
+            `Epoch (${colorNumber(currentEpochEndBlock)}) couldn't be closed: ${
+              error.stack
+            }`
           );
         }
 
@@ -174,7 +78,7 @@ export async function listenToBlockchain() {
           } catch (err) {
             const error = ensureError(err);
             logger.warning(
-              `Error while trying to emit rewards for Epoch (${colorNumber(
+              `Rewards couldn't be emitted for Epoch (${colorNumber(
                 currentEpochEndBlock
               )}): ${error.stack}`
             );
@@ -210,12 +114,10 @@ export async function listenToBlockchain() {
         await Promise.all(promises);
       }
 
-      currentBlock++;
+      // Wait a little bit between iterations
+      await sleep(2000);
     } catch (err: unknown) {
-      const error = ensureError(err);
-      if (!isTermination(error)) {
-        logger.error(`Error: ${error.stack}`);
-      }
+      logError({ err, logger });
     }
   }
 

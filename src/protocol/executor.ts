@@ -1,6 +1,5 @@
 import { BaseValidationExecutor } from "@/base/BaseValidationExecutor";
 import { logError } from "@/core/logger";
-import { isTermination } from "@/core/signal";
 import { randomInteger } from "@/utils/random-integer";
 import { sleep } from "@/utils/sleep";
 import { Offer } from "@forest-protocols/sdk";
@@ -12,9 +11,9 @@ import { Offer } from "@forest-protocols/sdk";
  * start them and collect their results.
  *
  * Check this example and if you need more,
- * check src/executors for more executor class implementations
+ * check src/executors for more executor implementations.
  *
- * This class will be started if `PROTOCOL_VALIDATION_EXECUTOR`
+ * This class will be in use if `PROTOCOL_VALIDATION_EXECUTOR`
  * environment variable is given as `true`
  */
 export class ProtocolValidationExecutor extends BaseValidationExecutor {
@@ -27,7 +26,6 @@ export class ProtocolValidationExecutor extends BaseValidationExecutor {
      */
     while (this.isAlive) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const offers = await this.getOffersToBeTested();
 
         // TODO: Implement the logic how and when Validation sessions should start
@@ -35,21 +33,34 @@ export class ProtocolValidationExecutor extends BaseValidationExecutor {
           "Waiting for the implementation, check src/protocol/executor.ts"
         );
 
+        /**
+         * Example implementation ->
+         */
+
+        // Start Validation sessions for the chosen Offers
+        const sessions = await this.startSessions(offers);
+
+        // Save each of the session's result to the database
+        for (const session of sessions) {
+          await this.saveValidationSession(session);
+        }
+
+        // Commit all of the results that saved to the database to the blockchain.
+        await this.commitResultsToBlockchain();
+
+        /**
+         * <- Example implementation
+         */
+
         // Wait some time between each cycle
         await sleep(1000);
       } catch (err) {
-        // Check if the error is come from termination signal (aka Ctrl+C)
-        if (isTermination(err)) {
-          // Break the execution
-          break;
-        }
-
         // Properly log error message
         logError({ err, logger: this.logger, prefix: "Something went wrong:" });
       }
     }
 
-    // <- it ends over here
+    // <- Lifecycle ends over here
   }
 
   /**

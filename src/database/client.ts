@@ -7,7 +7,6 @@ import * as schema from "./schema";
 import pg from "pg";
 import { Address, Hex } from "viem";
 import { TestResult } from "@/core/types";
-import { abortController } from "@/core/signal";
 
 export type DatabaseClientType = NodePgDatabase<typeof schema>;
 
@@ -27,8 +26,6 @@ class DatabaseClient {
     this.client = drizzle(this.pool, {
       schema,
     });
-
-    abortController.signal.addEventListener("abort", () => this.disconnect());
   }
 
   async disconnect() {

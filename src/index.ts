@@ -5,12 +5,11 @@ import { readdirSync, readFileSync, rmSync, statSync } from "fs";
 import { DB } from "./database/client";
 import { Validator } from "./core/validator";
 import { colorHex } from "./core/color";
-import { activeValidations } from "./core/sessions";
-import { abortController } from "./core/signal";
 import { IntervalValidationExecutor } from "./executors/IntervalValidationExecutor";
 import { ProtocolValidationExecutor } from "./protocol/executor";
 import { BaseValidationExecutor } from "./base/BaseValidationExecutor";
 import { listenToBlockchain } from "./core/listener";
+import { abortController } from "./core/signal";
 
 const executors: BaseValidationExecutor[] = [];
 
@@ -74,18 +73,26 @@ async function main() {
 
     // Start blockchain listener to keep track of Reveal and Commit windows
     listenToBlockchain().catch((err) => logError({ err, logger }));
-
-    // Start all of the executors
-    await Promise.all(executors.map((executor) => executor.start()));
   } catch (err) {
     logError({ err, logger });
   }
 
-  logger.debug("Main function is over");
-  if (activeValidations == 0 && abortController.signal.aborted) {
-    logger.warning("See ya...");
-    process.exit();
+  if (!abortController.signal.aborted) {
+    // Start all of the executors
+    await Promise.all(executors.map((executor) => executor.start()));
   }
+
+  // Clean all the Validators (aka gracefully destroy them)
+  logger.info(`Cleaning Validators...`);
+  for (const [, validator] of Object.entries(config.validators)) {
+    await validator.clean();
+  }
+
+  // Disconnect from the database
+  await DB.disconnect();
+
+  logger.warning("See ya...");
+  process.exit();
 }
 
 // To make BigInt values visible within JSON.stringify output.

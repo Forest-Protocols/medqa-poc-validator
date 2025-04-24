@@ -46,11 +46,12 @@ import { z } from "zod";
 import { DbValidation } from "@/database/schema";
 import { NotEnoughUSDCError as NotEnoughUSDCError } from "@/errors/NotEnoughUSDCError";
 import { PromiseQueue } from "./queue";
-import { abortController, isTermination } from "./signal";
+import { abortController } from "./signal";
 import { ResourceIsNotOnlineError } from "@/errors/ResourceIsNotOnlineError";
 import { chunked } from "@/utils/array";
 import { sleep } from "@/utils/sleep";
 import { join } from "path";
+import { isTermination } from "@/utils/is-termination";
 
 export class Validator {
   logger!: Logger;
@@ -515,12 +516,17 @@ export class Validator {
       } catch (err: unknown) {
         const error = ensureError(err);
         if (error instanceof PipeError) {
-          this.logger.warning(
-            `Couldn't retrieve details of Agreement ${colorNumber(
-              agreementId
-            )}: ${error.stack}`,
-            loggerOptions
-          );
+          // Ignore not found errors. We just need to wait a little bit more
+          // until the Provider picks up the creation event from the blockchain
+          if (error.code !== PipeResponseCode.NOT_FOUND) {
+            this.logger.warning(
+              `Couldn't retrieve details of Agreement ${colorNumber(
+                agreementId
+              )}: ${error.stack}`,
+              loggerOptions
+            );
+          }
+
           // Ignore timeout errors since we have our timeout
         } else if (!(error instanceof TimeoutError)) {
           throw err;
@@ -561,6 +567,16 @@ export class Validator {
         this.createLoggerOptions(sessionId)
       );
     }, true);
+  }
+
+  /**
+   * Finalizes the current works from the queue and closes Pipe.
+   */
+  async clean() {
+    await this.rpcQueue.waitUntilEmpty();
+    await this.pipe.close();
+
+    this.logger.debug(`Cleaned!`);
   }
 
   /**

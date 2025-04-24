@@ -2,9 +2,13 @@ import { Offer, Protocol, Status } from "@forest-protocols/sdk";
 import { logError, logger as mainLogger } from "@/core/logger";
 import { rpcClient } from "@/core/client";
 import { config } from "@/core/config";
-import { startValidation } from "@/core/sessions";
-import { abortController, isTermination } from "@/core/signal";
+import { abortController } from "@/core/signal";
 import { yellow } from "ansis";
+import { ValidationSession } from "@/core/session";
+import { DB } from "@/database/client";
+import { ValidationSessionInfo } from "@/core/types";
+import { ensureError } from "@/utils/ensure-error";
+import { isTermination } from "@/utils/is-termination";
 
 /**
  * Base class for Validation executors.
@@ -18,6 +22,7 @@ export abstract class BaseValidationExecutor {
       client: rpcClient,
       address: config.PROTOCOL_ADDRESS,
       registryContractAddress: config.REGISTRY_ADDRESS,
+      signal: abortController.signal,
     });
   }
 
@@ -33,6 +38,83 @@ export abstract class BaseValidationExecutor {
   protected abstract selectOffers(allOffers: Offer[]): Promise<Offer[]>;
 
   /**
+   * Saves the given Validation info alongside the score to the database.
+   */
+  async saveTestResults(info: ValidationSessionInfo, score: number) {
+    if (info.testResults.length > 0) {
+      try {
+        await DB.saveValidation(
+          {
+            startedAt: info.startedAt,
+            offerId: info.offerId,
+            providerId: info.providerId,
+            sessionId: info.sessionId,
+            validatorId: info.validatorId,
+            agreementId: info.agreementId,
+            score: score,
+          },
+          info.testResults
+        );
+      } catch (err) {
+        if (!isTermination(err)) {
+          const error = ensureError(err);
+          this.logger.warning(
+            `Session ${info.sessionId} results couldn't save to the database: ${error.stack}`
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Calculates the score of the given Validation session and
+   * saves the results to the database.
+   */
+  async saveValidationSession(session: ValidationSession) {
+    // If the given session is executed and has some results
+    if (session.testResults.length > 0 && session.validation) {
+      try {
+        const score = await session.validation.calculateScore(
+          session.testResults
+        );
+        await this.saveTestResults(session.info, score);
+      } catch (err) {
+        if (!isTermination(err)) {
+          const error = ensureError(err);
+          this.logger.warning(
+            `Session ${session.id} results couldn't save to the database: ${error.stack}`
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Notifies the given Validators to commit all of their
+   * test results (that were saved to the database) to the blockchain.
+   * If the blockchain is not in Commit Window state, simply the
+   * call will be ignored.
+   *
+   * If Validators are not specified, it uses all of the configured ones.
+   * @param validatorTags
+   */
+  commitResultsToBlockchain(validatorTags?: string[]) {
+    if (!validatorTags) {
+      validatorTags = Object.keys(config.validators);
+    }
+
+    for (const validatorTag of validatorTags) {
+      config.validators[validatorTag].commitValidations().catch((err) =>
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while committing results by Validator ${validatorTag}:`,
+        })
+      );
+    }
+  }
+
+  /**
    * Starts the executor
    */
   async start() {
@@ -42,10 +124,7 @@ export abstract class BaseValidationExecutor {
     try {
       await this.exec();
     } catch (err) {
-      // No need to log termination error
-      if (!isTermination(err)) {
-        logError({ err, logger: this.logger });
-      }
+      logError({ err, logger: this.logger });
     } finally {
       this.logger.warning(
         `Executor ${yellow.bold(this.constructor.name)} is finished`
@@ -55,29 +134,43 @@ export abstract class BaseValidationExecutor {
 
   /**
    * Starts Validation sessions for each of the given Offers and Validators.
-   * If Validators are not specified, uses all of them that defined in the environment.
+   * If Validators are not specified, uses all of configured ones.
    * Waits all of the Validation sessions are completed.
    * @param offers The Offers to be tested
    * @param validatorTags The validators that will test the Offers
+   * @returns Validation sessions
    */
-  async startSession(offers: Offer[], validatorTags?: string[]) {
-    const validations: Promise<Awaited<ReturnType<typeof startValidation>>>[] =
-      [];
+  async startSessions(offers: Offer[], options?: { validatorTags?: string[] }) {
+    const validations: Promise<ValidationSession>[] = [];
 
-    if (!validatorTags) {
-      validatorTags = Object.keys(config.validators);
+    if (!options) {
+      options = {};
+    }
+
+    if (!options?.validatorTags) {
+      options.validatorTags = Object.keys(config.validators);
     }
 
     for (const offer of offers) {
-      for (const validatorTag of validatorTags) {
+      for (const validatorTag of options.validatorTags) {
         validations.push(
-          startValidation(config.validators[validatorTag], offer.id)
+          new Promise((resolve, reject) => {
+            const session = new ValidationSession({
+              offer,
+              validator: validatorTag,
+            });
+            session
+              .start()
+              .then(() => resolve(session))
+              .catch(reject);
+          })
         );
       }
     }
 
     // Wait until all of them are completed
-    return await Promise.all(validations);
+    const sessions = await Promise.all(validations);
+    return sessions;
   }
 
   /**

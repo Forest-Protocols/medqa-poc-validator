@@ -4,6 +4,7 @@ import { abortController } from "./signal";
 export class PromiseQueue {
   private concurrency: number;
   private promises: (() => Promise<any>)[] = [];
+  private emptyResolvers: (() => void)[] = [];
   private activePromises = 0;
 
   constructor(options?: { concurrency?: number }) {
@@ -31,12 +32,26 @@ export class PromiseQueue {
           .finally(() => {
             this.activePromises--;
             this.drain(); // Trigger draining the queue
+            this.checkIfEmpty(); // Check and notify callers if the queue is empty
           });
       };
 
       // Add new promise to the queue and trigger draining the queue
       this.promises.push(task);
       this.drain();
+    });
+  }
+
+  /**
+   * Waits until the queue is empty and there is no active promises
+   */
+  async waitUntilEmpty() {
+    if (this.promises.length === 0 && this.activePromises === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((res) => {
+      this.emptyResolvers.push(res);
     });
   }
 
@@ -48,6 +63,13 @@ export class PromiseQueue {
     ) {
       const next = this.promises.shift();
       next?.();
+    }
+  }
+
+  private checkIfEmpty() {
+    if (this.promises.length === 0 && this.activePromises === 0) {
+      this.emptyResolvers.forEach((res) => res());
+      this.emptyResolvers = [];
     }
   }
 }
