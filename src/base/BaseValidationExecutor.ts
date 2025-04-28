@@ -140,7 +140,20 @@ export abstract class BaseValidationExecutor {
    * @param validatorTags The validators that will test the Offers
    * @returns Validation sessions
    */
-  async startSessions(offers: Offer[], options?: { validatorTags?: string[] }) {
+  async startSessions(
+    offers: Offer[],
+    options?: {
+      /**
+       * Additional parameter that is going to be passed to the Validation
+       */
+      parameters?: Record<string, unknown>;
+
+      /**
+       * The Validators that are going to run the Validation process.
+       */
+      validatorTags?: string[];
+    }
+  ) {
     const validations: Promise<ValidationSession>[] = [];
 
     if (!options) {

@@ -26,6 +26,7 @@ export class ValidationSession {
   resource: Resource | undefined;
   agreementId: number | undefined;
   testResults: TestResult[] = [];
+  parameters?: Record<string, unknown>;
 
   /**
    * Instantiates a new Validation session for the given Offer and Validator
@@ -40,6 +41,11 @@ export class ValidationSession {
      * The Offer that is going to be tested
      */
     offer: Offer;
+
+    /**
+     * The parameters that is going to be passed to the Validation
+     */
+    parameters?: Record<string, unknown>;
   }) {
     if (typeof params.validator === "string") {
       this.validator = config.validators[params.validator];
@@ -47,6 +53,7 @@ export class ValidationSession {
       this.validator = params.validator;
     }
 
+    this.parameters = params.parameters;
     this.offer = params.offer;
     this.logger = mainLogger.child({
       context: `Validator(${this.validator.tag}/${this.id})`,
@@ -70,7 +77,8 @@ export class ValidationSession {
       this.validation = (await Validation.create(
         this.validator.tag,
         this.resource!,
-        this.id
+        this.id,
+        this.parameters
       )) as Validation;
       this.testResults = await this.validation.start();
     } catch (err) {

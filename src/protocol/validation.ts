@@ -9,6 +9,9 @@ import { ExampleHumanEvaluation } from "./tests/ExampleHumanEvaluation";
  * Define the general necessary actions for your tests.
  */
 export class Validation extends BaseValidation {
+  override parameters = {
+    /** Default value for parameters of the Validation process */
+  };
   override readonly tests: AbstractTestConstructor[] = [
     /**
      * TODO: Place Test implementations

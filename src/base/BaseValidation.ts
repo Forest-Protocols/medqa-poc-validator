@@ -8,7 +8,10 @@ import { config } from "@/core/config";
 import { AbstractPipe } from "@forest-protocols/sdk";
 import { isTermination } from "@/utils/is-termination";
 
-export class BaseValidation<T extends Record<string, unknown> = {}> {
+export class BaseValidation<
+  T extends Record<string, unknown> = {},
+  K extends Record<string, unknown> = {}
+> {
   protected logger!: Logger;
   protected sessionId!: string;
   protected validatorTag!: string;
@@ -16,6 +19,8 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
   protected readonly tests: AbstractTestConstructor[] = [];
 
   private _resource!: Resource;
+
+  parameters!: K;
 
   get resource() {
     return this._resource as Resource & { details: T };
@@ -31,12 +36,13 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
   }
 
   /**
-   * Creates a new validation for the given Validator tag
+   * Creates a new Validation for the given Validator tag
    */
-  static async create(
+  static async create<K extends Record<string, unknown> = {}>(
     validatorTag: string,
     resource: Resource,
-    sessionId: string
+    sessionId: string,
+    parameters?: K
   ) {
     const validation = new this();
 
@@ -48,6 +54,7 @@ export class BaseValidation<T extends Record<string, unknown> = {}> {
       context: `Validator(${validatorTag}/${sessionId})`,
     });
 
+    validation.parameters = parameters || {};
     validation.validatorTag = validatorTag;
     validation._resource = resource;
     validation.sessionId = sessionId;
