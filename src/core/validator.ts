@@ -28,7 +28,6 @@ import {
   getContract,
   GetContractReturnType,
   Hex,
-  nonceManager,
   PublicClient,
   WalletClient,
 } from "viem";
@@ -79,8 +78,7 @@ export class Validator {
     });
     validator.tag = tag;
     validator.account = privateKeyToAccount(
-      valConfig.validatorWalletPrivateKey,
-      { nonceManager }
+      valConfig.validatorWalletPrivateKey
     );
     validator.slasher = new Slasher({
       client: rpcClient,
