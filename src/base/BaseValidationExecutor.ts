@@ -208,7 +208,7 @@ export abstract class BaseValidationExecutor {
       return [];
     }
 
-    return await this.selectOffers(allOffers);
+    return await this.selectOffers(activeOffers);
   }
 
   /**
