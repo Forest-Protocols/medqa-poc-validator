@@ -9,14 +9,14 @@ If you want to start validating services in this Protocol follow the steps below
 
 ### Step-by-step instructions
 
-#### Prerequisites
+#### 0. Prerequisites
 
-Install [Node.js](https://nodejs.org) (min version 22.12.0) environment, Forest Protocols [CLI](https://github.com/Forest-Protocols/forest-cli) tool and a functional PostgreSQL (min version 16) database for the daemon. To install that environment, you can check the links below;
-
-- Node.js [official](https://nodejs.org/en/download) downloads page
-- [nvm](https://github.com/nvm-sh/nvm) - Node Version Manager, helps to manage multiple Node versions at the same time.
-- PostgreSQL [official](https://www.postgresql.org/download/) downloads page (if you want to run Postgres natively)
-- Docker [image](https://hub.docker.com/_/postgres) for PostgreSQL (if you want to run dockerized Postgres)
+Install:
+- Node.js (min version 22.12.0): [official](https://nodejs.org/en/download) or via (Optional) Node Version Manager: [link](https://github.com/nvm-sh/nvm)
+- ForestAI CLI: [official](https://www.npmjs.com/package/@forest-protocols/cli)
+- PostgreSQL (min version 16):
+  * If you want to run Postgres natively: [official](https://www.postgresql.org/download/)
+  * If you want to run Postgres dockerized: [PG Docker image](https://hub.docker.com/_/postgres)
 
 #### 1. Register in the Network
 
