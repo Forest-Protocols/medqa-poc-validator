@@ -601,7 +601,11 @@ export class Validator {
         encryptionKey: this.actorInfo.operatorAddr,
       });
 
-      await this.pipe.init(config.CHAIN == "optimism" ? "production" : "dev");
+      await this.pipe.init(
+        config.CHAIN == "optimism" || config.CHAIN === "base"
+          ? "production"
+          : "dev"
+      );
 
       // Setup routes
       this.pipe.route(PipeMethod.GET, "/details", async (req) => {

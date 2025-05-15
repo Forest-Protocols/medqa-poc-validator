@@ -89,7 +89,9 @@ function parseEnvVariables() {
       LOG_LEVEL: z.enum(["error", "warning", "info", "debug"]).default("debug"),
       DATABASE_URL: nonEmptyStringSchema,
       RPC_HOST: nonEmptyStringSchema,
-      CHAIN: z.enum(["anvil", "optimism", "optimism-sepolia"]).default("anvil"),
+      CHAIN: z
+        .enum(["anvil", "optimism", "optimism-sepolia", "base", "base-sepolia"])
+        .default("anvil"),
       PROTOCOL_ADDRESS: addressSchema,
       MAX_CONCURRENT_VALIDATION: z.coerce.number().default(1),
       EVALUATION_WAIT_TIME: z
