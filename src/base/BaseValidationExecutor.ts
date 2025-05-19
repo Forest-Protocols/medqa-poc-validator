@@ -171,6 +171,7 @@ export abstract class BaseValidationExecutor {
             const session = new ValidationSession({
               offer,
               validator: validatorTag,
+              parameters: options.parameters,
             });
             session
               .start()
