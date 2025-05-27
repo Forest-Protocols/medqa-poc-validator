@@ -503,13 +503,19 @@ export class Validator {
         }
         const resource = response?.body;
 
-        if (resource?.deploymentStatus == DeploymentStatus.Running) {
-          this.logger.info(
-            `Resource of Agreement ${colorNumber(agreementId)} is online`,
-            loggerOptions
-          );
-          resource.operatorAddress = operatorAddress;
-          return resource;
+        if (resource) {
+          if (resource.deploymentStatus === DeploymentStatus.Running) {
+            this.logger.info(
+              `Resource of Agreement ${colorNumber(agreementId)} is online`,
+              loggerOptions
+            );
+            resource.operatorAddress = operatorAddress;
+            return resource;
+          } else if (resource.deploymentStatus === DeploymentStatus.Failed) {
+            throw new Error(
+              `Deployment of Resource ${colorNumber(resource.id)} is failed`
+            );
+          }
         }
       } catch (err: unknown) {
         const error = ensureError(err);
