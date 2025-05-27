@@ -46,6 +46,7 @@ export abstract class BaseValidationExecutor {
         await DB.saveValidation(
           {
             startedAt: info.startedAt,
+            finishedAt: info.finishedAt,
             offerId: info.offerId,
             providerId: info.providerId,
             sessionId: info.sessionId,

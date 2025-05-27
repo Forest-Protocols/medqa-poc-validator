@@ -14,6 +14,7 @@ export type ValidationResult = {
 
 export type ValidationSessionInfo = {
   startedAt: Date;
+  finishedAt?: Date;
   sessionId: string;
   offerId: number;
   providerId: number;

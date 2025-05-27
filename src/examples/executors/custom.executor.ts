@@ -45,8 +45,12 @@ export class ProtocolValidationExecutor extends BaseValidationExecutor {
               readFileSync(path).toString()
             );
 
-            // Date was stored as ISO string, so we need to convert it into a real Date object.
+            // Dates were stored as ISO string, so we need to convert it into a real Date object.
             guesses.startedAt = new Date(guesses.startedAt);
+
+            if (guesses.finishedAt !== undefined) {
+              guesses.finishedAt = new Date(guesses.finishedAt);
+            }
 
             // Save them to the database so in the next step
             // they will be able to committed to the blockchain

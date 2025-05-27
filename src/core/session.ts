@@ -19,6 +19,7 @@ const nanoid = customAlphabet("0123456789abcdefghijklmnoprstuvyz", 15);
 export class ValidationSession {
   id = nanoid();
   startedAt = new Date();
+  finishedAt: Date | undefined;
   validation: Validation | undefined;
   validator: Validator;
   logger: winston.Logger;
@@ -103,6 +104,7 @@ export class ValidationSession {
           );
       }
 
+      this.finishedAt = new Date();
       this.logger.info(
         `<- Validation session for Offer ${colorNumber(this.offer.id)} is over`
       );
@@ -133,6 +135,7 @@ export class ValidationSession {
       startedAt: this.startedAt,
       validatorId: this.validator.actorInfo.id,
       testResults: this.testResults,
+      finishedAt: this.finishedAt,
     };
   }
 
