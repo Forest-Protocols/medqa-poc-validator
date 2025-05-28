@@ -19,10 +19,14 @@ import {
   XMTPv3Pipe,
   Token,
   TimeoutError,
+  stringifyJSON,
+  generateCID,
 } from "@forest-protocols/sdk";
 import {
   Account,
   Address,
+  ContractFunctionExecutionError,
+  ContractFunctionRevertedError,
   erc20Abi,
   formatUnits,
   getContract,
@@ -37,7 +41,7 @@ import { rpcClient } from "./client";
 import { logger as mainLogger } from "./logger";
 import { Logger } from "winston";
 import { colorHex, colorNumber } from "./color";
-import { Resource, ValidatorConfiguration } from "./types";
+import { Resource, ValidationAuditFile, ValidatorConfiguration } from "./types";
 import { ensureError } from "@/utils/ensure-error";
 import { DB } from "@/database/client";
 import { pipes } from "./pipe";
@@ -177,10 +181,11 @@ export class Validator {
           config.MAX_VALIDATION_TO_COMMIT,
           uncommittedValidations,
           async (chunk) => {
-            // Check abort in each chunk
-            // It will break the whole chunked() call if aborted
+            // Check abort in each chunk if termination signal is received
+            // It will break the whole chunked() call if something is thrown
             this.checkAbort();
             try {
+              // Sort the chunk to have consistent commitHash
               chunk.sort((a, b) =>
                 a.agreementId < b.agreementId
                   ? -1
@@ -189,6 +194,7 @@ export class Validator {
                   : 0
               );
 
+              // Compute the hash of the chunk
               const hash = await this.slasher.computeHash(
                 chunk.map((validation) => ({
                   agreementId: validation.agreementId,
@@ -197,10 +203,33 @@ export class Validator {
                 }))
               );
 
+              // Generate audit file data
+              const auditFile: ValidationAuditFile = {
+                commitHash: hash,
+                data: chunk.map((c) => ({
+                  sessionId: c.sessionId,
+                  validatorId: c.validatorId,
+                  startedAt: c.startedAt,
+                  finishedAt: c.finishedAt,
+                  score: c.score,
+                  agreementId: c.agreementId,
+                  offerId: c.offerId,
+                  providerId: c.providerId,
+                  testResults: c.testResults,
+                })),
+              };
+
+              // Calculate the CID of the audit file data
+              const detailsLink = (
+                await generateCID(stringifyJSON(auditFile.data))
+              ).toString();
+
+              // Commit them to the blockchain
               await this.slasher.commitResult(
                 hash,
                 this.actorInfo.ownerAddr,
-                config.PROTOCOL_ADDRESS
+                config.PROTOCOL_ADDRESS,
+                detailsLink
               );
 
               // Save the commit hash to the database
@@ -305,7 +334,7 @@ export class Validator {
             );
 
             this.logger.debug(
-              `Reveal Chunk: ${JSON.stringify(
+              `Reveal Chunk with hash ${colorHex(commitHash)}: ${JSON.stringify(
                 validations.map((validation) => ({
                   agreementId: validation.agreementId,
                   provId: validation.providerId,
@@ -315,6 +344,8 @@ export class Validator {
                 2
               )}`
             );
+
+            // Reveal the results to the blockchain
             await this.slasher.revealResult(
               commitHash as Hex,
               this.actorInfo.ownerAddr,
@@ -325,6 +356,8 @@ export class Validator {
                 score: BigInt(validation.score),
               }))
             );
+
+            // Mark validations as revealed in the database
             await DB.markAsRevealed(commitHash as Hex);
             this.logger.info(
               `${
@@ -337,13 +370,32 @@ export class Validator {
             }
 
             const error = ensureError(err);
-            this.logger.error(
-              `Error while trying to reveal ${
-                validations.length
-              } validations (commit hash: ${colorHex(commitHash)}): ${
-                error.stack
-              }`
-            );
+
+            /**
+             * If the error was thrown because we were too late to reveal
+             * the commit hash, then mark the commit hash as vanished so
+             * we won't try to reveal it again.
+             */
+            if (
+              error instanceof ContractFunctionExecutionError &&
+              error.cause instanceof ContractFunctionRevertedError &&
+              error.cause.reason?.includes("Array index is out of bounds")
+            ) {
+              this.logger.warning(
+                `The commit ${colorHex(
+                  commitHash
+                )} is vanished and cannot be revealed anymore, skipping...`
+              );
+              await DB.markAsVanished(commitHash as Hex);
+            } else {
+              this.logger.error(
+                `Error while trying to reveal ${
+                  validations.length
+                } validations (commit hash: ${colorHex(commitHash)}): ${
+                  error.stack
+                }`
+              );
+            }
           }
         }
         this.logger.info("Reveal done");

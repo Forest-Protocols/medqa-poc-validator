@@ -23,6 +23,13 @@ export type ValidationSessionInfo = {
   testResults: TestResult[];
 };
 
+export type ValidationAuditFile = {
+  commitHash: string;
+  data: (ValidationSessionInfo & {
+    score: number;
+  })[];
+};
+
 export type StructuredTestResults =
   | Record<string, unknown>
   | Array<Record<string, unknown>>
