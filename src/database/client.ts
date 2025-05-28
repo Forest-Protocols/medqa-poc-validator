@@ -1,7 +1,15 @@
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { config } from "@/core/config";
 import { generateCID } from "@forest-protocols/sdk";
-import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { logger } from "@/core/logger";
 import * as schema from "./schema";
 import pg from "pg";
@@ -47,14 +55,24 @@ class DatabaseClient {
    */
   async getUncommittedValidations(validatorId: number) {
     return await this.client
-      .select()
+      .select({
+        ...getTableColumns(schema.validationsTable),
+        testResults: this.testResultsAggregation,
+      })
       .from(schema.validationsTable)
+      .innerJoin(
+        schema.testResultsTable,
+        eq(schema.testResultsTable.sessionId, schema.validationsTable.sessionId)
+      )
       .where(
         and(
           isNull(schema.validationsTable.commitHash),
-          eq(schema.validationsTable.validatorId, validatorId)
+          eq(schema.validationsTable.validatorId, validatorId),
+          eq(schema.validationsTable.isVanished, false),
+          eq(schema.validationsTable.isRevealed, false)
         )
-      );
+      )
+      .groupBy(schema.validationsTable.sessionId);
   }
 
   /**
@@ -63,15 +81,24 @@ class DatabaseClient {
    */
   async getUnrevealedValidations(validatorId: number) {
     return await this.client
-      .select()
+      .select({
+        ...getTableColumns(schema.validationsTable),
+        testResults: this.testResultsAggregation,
+      })
       .from(schema.validationsTable)
+      .innerJoin(
+        schema.testResultsTable,
+        eq(schema.testResultsTable.sessionId, schema.validationsTable.sessionId)
+      )
       .where(
         and(
           isNotNull(schema.validationsTable.commitHash),
           eq(schema.validationsTable.isRevealed, false),
+          eq(schema.validationsTable.isVanished, false),
           eq(schema.validationsTable.validatorId, validatorId)
         )
-      );
+      )
+      .groupBy(schema.validationsTable.sessionId);
   }
 
   async setCommitHash(sessionIds: string[], hash: Hex) {
@@ -153,6 +180,21 @@ class DatabaseClient {
       .returning();
   }
 
+  async markAsVanished(commitHash: Hex) {
+    await this.client
+      .update(schema.validationsTable)
+      .set({
+        isVanished: true,
+      })
+      .where(
+        and(
+          eq(schema.validationsTable.isVanished, false),
+          eq(schema.validationsTable.commitHash, commitHash)
+        )
+      )
+      .returning();
+  }
+
   /**
    * Saves a validation with test results to the database
    */
@@ -198,6 +240,24 @@ class DatabaseClient {
         .values(values)
         .onConflictDoNothing();
     });
+  }
+
+  private get testResultsAggregation() {
+    return sql<TestResult[]>`
+      COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'isSuccess', ${schema.testResultsTable.isSucceed},
+            'raw', ${schema.testResultsTable.raw},
+            'result', ${schema.testResultsTable.result},
+            'testName', ${schema.testResultsTable.testName}
+          )
+        )
+        FILTER(
+          WHERE ${isNotNull(schema.testResultsTable.sessionId)}
+        ),
+        '[]'::jsonb
+      )`;
   }
 }
 

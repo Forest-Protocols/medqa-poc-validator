@@ -42,7 +42,6 @@ import { ensureError } from "@/utils/ensure-error";
 import { DB } from "@/database/client";
 import { pipes } from "./pipe";
 import { z } from "zod";
-import { DbValidation } from "@/database/schema";
 import { NotEnoughUSDCError as NotEnoughUSDCError } from "@/errors/NotEnoughUSDCError";
 import { PromiseQueue } from "./queue";
 import { abortController } from "./signal";
@@ -274,7 +273,8 @@ export class Validator {
 
         // Group validations based on their hashes because we need to reveal
         // the validations that has the same hash at once.
-        const groupedValidations: Record<Hex, DbValidation[]> = {};
+        const groupedValidations: Record<Hex, typeof unrevealedValidations> =
+          {};
         for (const unrevealedValidation of unrevealedValidations) {
           if (
             groupedValidations[unrevealedValidation.commitHash!] === undefined

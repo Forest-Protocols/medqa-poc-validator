@@ -1,0 +1,1 @@
+ALTER TABLE "test_results" ADD COLUMN "test_name" varchar(100) DEFAULT 'N/A' NOT NULL;

@@ -20,6 +20,7 @@ export const testResultsTable = pgTable("test_results", {
   isSucceed: boolean("is_succeed").notNull().default(true),
   raw: text().notNull().default(""),
   result: json().notNull().$type<StructuredTestResults>().default({}),
+  testName: varchar("test_name", { length: 100 }).notNull().default("N/A"),
 });
 relations(testResultsTable, ({ one }) => ({
   validation: one(validationsTable, {
@@ -41,6 +42,7 @@ export const validationsTable = pgTable("validations", {
   providerId: integer("provider_id").notNull(),
   commitHash: varchar("commit_hash", { length: 70 }).$type<Hex>(),
   isRevealed: boolean("is_revealed").notNull().default(false),
+  isVanished: boolean("is_vanished").notNull().default(false),
 });
 relations(validationsTable, ({ many, one }) => ({
   testResults: many(testResultsTable),

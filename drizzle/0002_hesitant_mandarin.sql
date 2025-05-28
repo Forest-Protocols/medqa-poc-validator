@@ -1,0 +1,1 @@
+ALTER TABLE "validations" ADD COLUMN "is_vanished" boolean DEFAULT false NOT NULL;
