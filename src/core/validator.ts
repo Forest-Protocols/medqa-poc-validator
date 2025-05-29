@@ -54,6 +54,8 @@ import { chunked } from "@/utils/array";
 import { sleep } from "@/utils/sleep";
 import { join } from "path";
 import { isTermination } from "@/utils/is-termination";
+import { availableUploaders } from "./uploader";
+import { AbstractUploader } from "@/base/AbstractUploader";
 
 export class Validator {
   logger!: Logger;
@@ -68,6 +70,7 @@ export class Validator {
   actorInfo!: Actor;
   usdc!: GetContractReturnType<typeof erc20Abi, PublicClient | WalletClient>;
 
+  private uploaders: AbstractUploader[] = [];
   private rpcQueue = new PromiseQueue();
 
   /**
@@ -139,6 +142,34 @@ export class Validator {
     abortController.signal.addEventListener("abort", () => {
       validator.pipe?.close();
     });
+
+    // Initialize available uploaders for this Validator
+    for (const enabledUploader of config.ENABLED_UPLOADERS) {
+      const Uploader = availableUploaders.find(
+        (uploader) => uploader.name === `${enabledUploader}Uploader`
+      );
+
+      if (!Uploader) {
+        validator.logger.warning(
+          `Uploader ${enabledUploader} is not available, skipping...`
+        );
+        continue;
+      }
+
+      // Check if the uploader is already initialized
+      if (validator.uploaders.some((u) => u instanceof Uploader)) {
+        validator.logger.info(
+          `Uploader ${enabledUploader} is already initialized, skipping...`
+        );
+        continue;
+      }
+
+      validator.logger.info(`Initializing uploader: ${enabledUploader}`);
+
+      const uploader = new Uploader(validator);
+      await uploader.init();
+      validator.uploaders.push(uploader);
+    }
 
     return validator;
   }
@@ -359,6 +390,46 @@ export class Validator {
 
             // Mark validations as revealed in the database
             await DB.markAsRevealed(commitHash as Hex);
+
+            // Generate audit file data
+            const auditFile: ValidationAuditFile = {
+              commitHash,
+              data: validations.map((v) => ({
+                sessionId: v.sessionId,
+                validatorId: v.validatorId,
+                startedAt: v.startedAt,
+                finishedAt: v.finishedAt,
+                score: v.score,
+                agreementId: v.agreementId,
+                offerId: v.offerId,
+                providerId: v.providerId,
+                testResults: v.testResults,
+              })),
+            };
+
+            // Call uploaders with the results
+            for (const uploader of this.uploaders) {
+              try {
+                await uploader.upload([
+                  {
+                    commitHash: auditFile.commitHash,
+                    content: stringifyJSON(auditFile.data)!,
+                  },
+                ]);
+                this.logger.info(
+                  `Audit file of ${colorHex(auditFile.commitHash)} (including ${
+                    auditFile.data.length
+                  } sessions) uploaded with ${uploader.constructor.name}`
+                );
+              } catch (err: unknown) {
+                const error = ensureError(err);
+                this.logger.error(
+                  `Error while uploading results of ${colorHex(
+                    auditFile.commitHash
+                  )} with ${uploader.constructor.name}: ${error.stack}`
+                );
+              }
+            }
             this.logger.info(
               `${
                 validations.length
@@ -631,6 +702,18 @@ export class Validator {
   async clean() {
     await this.rpcQueue.waitUntilEmpty();
     await this.pipe.close();
+
+    for (const uploader of this.uploaders) {
+      try {
+        await uploader.close();
+        this.logger.info(`Uploader ${uploader.constructor.name} closed`);
+      } catch (err: unknown) {
+        const error = ensureError(err);
+        this.logger.error(
+          `Error while closing uploader ${uploader.constructor.name}: ${error.stack}`
+        );
+      }
+    }
 
     this.logger.debug(`Cleaned!`);
   }

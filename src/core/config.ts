@@ -89,9 +89,13 @@ function parseEnvVariables() {
       LOG_LEVEL: z.enum(["error", "warning", "info", "debug"]).default("debug"),
       DATABASE_URL: nonEmptyStringSchema,
       RPC_HOST: nonEmptyStringSchema,
-      CHAIN: z
-        .enum(["anvil", "optimism", "optimism-sepolia", "base", "base-sepolia"])
-        .default("anvil"),
+      CHAIN: z.enum([
+        "anvil",
+        "optimism",
+        "optimism-sepolia",
+        "base",
+        "base-sepolia",
+      ]),
       PROTOCOL_ADDRESS: addressSchema,
       MAX_CONCURRENT_VALIDATION: z.coerce.number().default(1),
       EVALUATION_WAIT_TIME: z
@@ -189,6 +193,20 @@ function parseEnvVariables() {
       SLASHER_ADDRESS: addressSchema.optional(),
       TOKEN_ADDRESS: addressSchema.optional(),
       USDC_ADDRESS: addressSchema.optional(),
+      ENABLED_UPLOADERS: z
+        .string()
+        .optional()
+        .transform((value) => {
+          if (!value) {
+            return [];
+          }
+
+          return value.split(",").map((uploader) => uploader.trim());
+        }),
+
+      PEERBENCH_UPLOADER_SUPABASE_ANON_KEY: z.string().optional(),
+      PEERBENCH_UPLOADER_SUPABASE_URL: z.string().optional(),
+      PEERBENCH_API_URL: z.string().optional(),
     })
     .superRefine((value, ctx) => {
       if (
