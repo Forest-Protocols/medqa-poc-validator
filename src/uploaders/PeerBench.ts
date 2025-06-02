@@ -51,6 +51,10 @@ export class PeerBenchUploader extends AbstractUploader {
       return;
     }
     this.logger.info(`Authenticated with PeerBench successfully`);
+
+    // Start auto refreshing the token
+    await this.supabaseClient.auth.startAutoRefresh();
+    this.logger.info(`Started auto refreshing Supabase token`);
   }
 
   async upload(auditFiles: UploadAuditFile[]): Promise<void> {
@@ -93,7 +97,8 @@ export class PeerBenchUploader extends AbstractUploader {
     if (!this.supabaseClient) {
       return;
     }
-    // Nothing to do
+    await this.supabaseClient!.auth.stopAutoRefresh();
+    this.logger.info(`Stopped auto refreshing Supabase token`);
   }
 
   private async login(email: string, password: string) {
