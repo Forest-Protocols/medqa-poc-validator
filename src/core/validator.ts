@@ -502,7 +502,10 @@ export class Validator {
       const loggerOptions = this.createLoggerOptions(sessionId);
       const offer = await this.protocol.getOffer(offerId);
       const provider = (await this.registry.getActor(offer.ownerAddr))!;
-      const initialDeposit = offer.fee * 2n * 2635200n;
+      const minDeposit = 2n * 2635200n * offer.fee;
+      const revenueShare = await this.registry.getRevenueShare();
+      const networkFee = (minDeposit * revenueShare) / 10000n; // 10000 is hundred percent points
+      const totalCost = minDeposit + networkFee;
       const [balance, ptAllowance] = await Promise.all([
         throttleRequest(
           () => this.usdc.read.balanceOf([this.account.address]),
@@ -525,14 +528,14 @@ export class Validator {
       );
 
       // Check balance
-      if (balance < initialDeposit) {
-        const formattedDeposit = formatUnits(initialDeposit, DECIMALS.USDC);
+      if (balance < totalCost) {
+        const formattedDeposit = formatUnits(totalCost, DECIMALS.USDC);
         throw new NotEnoughUSDCError(formattedBalance, formattedDeposit);
       }
 
       // Check allowance and increase if it's not enough
-      if (ptAllowance < initialDeposit) {
-        const formattedAmount = formatUnits(initialDeposit, DECIMALS.USDC);
+      if (ptAllowance < totalCost) {
+        const formattedAmount = formatUnits(totalCost, DECIMALS.USDC);
         this.logger.info(
           `USDC allowance is setting (to ${formattedAmount} USDC)`,
           loggerOptions
@@ -545,7 +548,7 @@ export class Validator {
               address: this.usdc.address,
               functionName: "approve",
               account: this.account,
-              args: [config.PROTOCOL_ADDRESS, initialDeposit],
+              args: [config.PROTOCOL_ADDRESS, totalCost],
             }),
           { signal: abortController.signal }
         );
@@ -568,7 +571,7 @@ export class Validator {
       this.checkAbort();
       const agreementId = await this.protocol.enterAgreement(
         offerId,
-        initialDeposit
+        minDeposit
       );
 
       this.logger.info(
