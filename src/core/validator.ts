@@ -477,7 +477,6 @@ export class Validator {
             }
           }
         }
-        this.logger.info("Reveal done");
       } catch (err) {
         if (isTermination(err)) {
           return;
