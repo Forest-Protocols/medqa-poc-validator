@@ -215,6 +215,13 @@ export class Validator {
             // Check abort in each chunk if termination signal is received
             // It will break the whole chunked() call if something is thrown
             this.checkAbort();
+
+            if (chunk.length !== config.MAX_VALIDATION_TO_COMMIT) {
+              // This chunk doesn't have enough validations to commit according to the config,
+              // (it might be the last chunk) so we need to skip it
+              return;
+            }
+
             try {
               // Sort the chunk to have consistent commitHash
               chunk.sort((a, b) =>
@@ -223,6 +230,18 @@ export class Validator {
                   : a.agreementId > b.agreementId
                   ? 1
                   : 0
+              );
+
+              this.logger.debug(
+                `Commit Results Chunk: ${JSON.stringify(
+                  chunk.map((validation) => ({
+                    agreementId: validation.agreementId,
+                    provId: validation.providerId,
+                    score: BigInt(validation.score),
+                  })),
+                  null,
+                  2
+                )}`
               );
 
               // Compute the hash of the chunk
@@ -273,17 +292,6 @@ export class Validator {
                   chunk.length
                 } validations is committed to the blockchain`
               );
-              this.logger.debug(
-                `Commit Results Chunk: ${JSON.stringify(
-                  chunk.map((validation) => ({
-                    agreementId: validation.agreementId,
-                    provId: validation.providerId,
-                    score: BigInt(validation.score),
-                  })),
-                  null,
-                  2
-                )}`
-              );
             } catch (err: unknown) {
               if (isTermination(err)) {
                 // Re-throw for outer catch block
@@ -297,7 +305,6 @@ export class Validator {
             }
           }
         );
-        this.logger.info("Results committed to the blockchain");
       } catch (err: unknown) {
         if (isTermination(err)) {
           return;
@@ -388,6 +395,12 @@ export class Validator {
               }))
             );
 
+            this.logger.info(
+              `${
+                validations.length
+              } validations are revealed (commit hash: ${colorHex(commitHash)})`
+            );
+
             // Mark validations as revealed in the database
             await DB.markAsRevealed(commitHash as Hex);
 
@@ -430,11 +443,6 @@ export class Validator {
                 );
               }
             }
-            this.logger.info(
-              `${
-                validations.length
-              } validations are revealed (commit hash: ${colorHex(commitHash)})`
-            );
           } catch (err: unknown) {
             if (isTermination(err)) {
               return;
