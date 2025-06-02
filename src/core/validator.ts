@@ -752,11 +752,7 @@ export class Validator {
         encryptionKey: this.actorInfo.operatorAddr,
       });
 
-      await this.pipe.init(
-        config.CHAIN == "optimism" || config.CHAIN === "base"
-          ? "production"
-          : "dev"
-      );
+      await this.pipe.init(config.NODE_ENV);
 
       // Setup routes
       this.pipe.route(PipeMethod.GET, "/details", async (req) => {
