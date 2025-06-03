@@ -253,7 +253,7 @@ export class Validator {
         })),
       };
 
-      const stringifiedData = stringifyJSON(auditFile)!;
+      const stringifiedData = stringifyJSON(auditFile.data)!;
       const cid = (await generateCID(stringifiedData)).toString();
 
       // Add upload records for each uploader
