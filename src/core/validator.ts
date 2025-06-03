@@ -238,6 +238,15 @@ export class Validator {
     for (const [commitHash, validations] of Object.entries(
       groupedValidations
     )) {
+      // Sort the validations to have consistent CID
+      validations.sort((a, b) =>
+        a.agreementId < b.agreementId
+          ? -1
+          : a.agreementId > b.agreementId
+          ? 1
+          : 0
+      );
+
       const auditFile: ValidationAuditFile = {
         commitHash: commitHash as Hex,
         data: validations.map((c) => ({
@@ -267,7 +276,7 @@ export class Validator {
         );
 
         this.logger.info(
-          `Upload record for ${colorHex(commitHash)} added with ${
+          `Added upload record for commit ${colorHex(commitHash)} via  ${
             uploader.constructor.name
           }. It'll be processed by the upload checker.`
         );
