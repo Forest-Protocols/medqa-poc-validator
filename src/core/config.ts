@@ -89,6 +89,10 @@ function parseEnvVariables() {
       LOG_LEVEL: z.enum(["error", "warning", "info", "debug"]).default("debug"),
       DATABASE_URL: nonEmptyStringSchema,
       RPC_HOST: nonEmptyStringSchema,
+      UPLOAD_CHECKER_INTERVAL: z
+        .string()
+        .default("1m")
+        .transform((value, ctx) => parseTime(value, ctx)),
       CHAIN: z.enum([
         "anvil",
         "optimism",

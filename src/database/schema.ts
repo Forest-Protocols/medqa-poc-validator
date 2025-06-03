@@ -52,6 +52,20 @@ relations(validationsTable, ({ many, one }) => ({
   }),
 }));
 
+export const uploadsTable = pgTable("uploads", {
+  cid: varchar({ length: 100 }).primaryKey(),
+  content: text().notNull(),
+  validatorId: integer("validator_id")
+    .references(() => validatorsTable.id)
+    .notNull(),
+  commitHash: varchar("commit_hash", { length: 70 })
+    .$type<Hex>()
+    .references(() => validationsTable.commitHash)
+    .notNull(),
+  uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
+  uploadedAt: timestamp("uploaded_at"),
+});
+
 export const validatorsTable = pgTable("validators", {
   id: integer("id").primaryKey(),
   ownerAddress: varchar("owner_address", { length: 65 }).notNull().unique(),

@@ -5,6 +5,7 @@ import {
   and,
   eq,
   getTableColumns,
+  inArray,
   isNotNull,
   isNull,
   or,
@@ -41,6 +42,85 @@ class DatabaseClient {
       return;
     }
     await this.pool.end(() => this.logger.info("Database connection closed"));
+  }
+
+  async addUploadRecord(
+    content: string,
+    uploadedBy: string,
+    validatorId: number,
+    commitHash: Hex,
+    cid?: string,
+    uploadedAt?: Date
+  ) {
+    const [upload] = await this.client
+      .insert(schema.uploadsTable)
+      .values({
+        cid: cid || (await generateCID(content)).toString(),
+        content,
+        validatorId,
+        commitHash,
+        uploadedBy,
+        uploadedAt,
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    return upload;
+  }
+
+  async markAsUploaded(cid: string, commitHash: Hex, validatorId: number) {
+    await this.client
+      .update(schema.uploadsTable)
+      .set({ uploadedAt: new Date() })
+      .where(
+        and(
+          eq(schema.uploadsTable.cid, cid),
+          eq(schema.uploadsTable.commitHash, commitHash),
+          eq(schema.uploadsTable.validatorId, validatorId)
+        )
+      );
+  }
+
+  async isUploadedBy(cid: string, uploadedBy: string) {
+    return await this.client
+      .select()
+      .from(schema.uploadsTable)
+      .where(
+        and(
+          eq(schema.uploadsTable.cid, cid),
+          eq(schema.uploadsTable.uploadedBy, uploadedBy)
+        )
+      );
+  }
+
+  async getUploads(validatorId: number, uploaded = false) {
+    return await this.client
+      .select()
+      .from(schema.uploadsTable)
+      .where(
+        and(
+          eq(schema.uploadsTable.validatorId, validatorId),
+          uploaded
+            ? isNotNull(schema.uploadsTable.uploadedAt)
+            : isNull(schema.uploadsTable.uploadedAt)
+        )
+      );
+  }
+
+  async getUploadsForRevealedValidations(
+    validatorId: number,
+    commitHashes: Hex[]
+  ) {
+    return await this.client
+      .select()
+      .from(schema.uploadsTable)
+      .where(
+        and(
+          eq(schema.uploadsTable.validatorId, validatorId),
+          isNotNull(schema.uploadsTable.uploadedAt),
+          inArray(schema.uploadsTable.commitHash, commitHashes)
+        )
+      );
   }
 
   async getDetailFiles(cids: string[]) {
@@ -94,6 +174,28 @@ class DatabaseClient {
         and(
           isNotNull(schema.validationsTable.commitHash),
           eq(schema.validationsTable.isRevealed, false),
+          eq(schema.validationsTable.isVanished, false),
+          eq(schema.validationsTable.validatorId, validatorId)
+        )
+      )
+      .groupBy(schema.validationsTable.sessionId);
+  }
+
+  async getRevealedValidations(validatorId: number) {
+    return await this.client
+      .select({
+        ...getTableColumns(schema.validationsTable),
+        testResults: this.testResultsAggregation,
+      })
+      .from(schema.validationsTable)
+      .innerJoin(
+        schema.testResultsTable,
+        eq(schema.testResultsTable.sessionId, schema.validationsTable.sessionId)
+      )
+      .where(
+        and(
+          isNotNull(schema.validationsTable.commitHash),
+          eq(schema.validationsTable.isRevealed, true),
           eq(schema.validationsTable.isVanished, false),
           eq(schema.validationsTable.validatorId, validatorId)
         )

@@ -72,6 +72,8 @@ export class Validator {
 
   private uploaders: AbstractUploader[] = [];
   private rpcQueue = new PromiseQueue();
+  private uploadCheckerInterval?: NodeJS.Timeout;
+  private isUploadCheckerRunning = false;
 
   /**
    * Creates a new Validator instance for the given tag.
@@ -171,6 +173,19 @@ export class Validator {
       validator.uploaders.push(uploader);
     }
 
+    // Check the corresponding uploads for validations that are already revealed and saved to the database
+    await validator.checkExistingValidationsToBeUploaded();
+
+    if (validator.uploaders.length > 0) {
+      // At startup check the uploads then start the interval for continuous checking
+      validator.checkUploads().then(() => {
+        validator.uploadCheckerInterval = setInterval(
+          () => validator.checkUploads(),
+          config.UPLOAD_CHECKER_INTERVAL
+        );
+      });
+    }
+
     return validator;
   }
 
@@ -182,6 +197,141 @@ export class Validator {
     await this.rpcQueue.queue(() =>
       this.token.emitRewards(epochEndBlockNumber)
     );
+  }
+
+  async checkExistingValidationsToBeUploaded() {
+    // Check the existence of the corresponding uploads for validations in the database
+    const revealedValidations = await DB.getRevealedValidations(
+      this.actorInfo.id
+    );
+    const uploads = await DB.getUploadsForRevealedValidations(
+      this.actorInfo.id,
+      revealedValidations.map((v) => v.commitHash!)
+    );
+
+    // Find the revealed validations that doesn't have corresponding uploads
+    const unuploadedRevealedValidations = revealedValidations.filter(
+      (v) => !uploads.some((u) => u.commitHash === v.commitHash)
+    );
+
+    if (unuploadedRevealedValidations.length == 0) {
+      this.logger.debug(`No unuploaded revealed validations found`);
+      return;
+    }
+
+    // Group validations based on their hashes
+    const groupedValidations: Record<
+      Hex,
+      typeof unuploadedRevealedValidations
+    > = {};
+    for (const unrevealedValidation of unuploadedRevealedValidations) {
+      if (groupedValidations[unrevealedValidation.commitHash!] === undefined) {
+        groupedValidations[unrevealedValidation.commitHash!] = [];
+      }
+
+      groupedValidations[unrevealedValidation.commitHash!].push(
+        unrevealedValidation
+      );
+    }
+
+    // Add those validations to the uploads table so the upload checker will upload them
+    for (const [commitHash, validations] of Object.entries(
+      groupedValidations
+    )) {
+      const auditFile: ValidationAuditFile = {
+        commitHash: commitHash as Hex,
+        data: validations.map((c) => ({
+          sessionId: c.sessionId,
+          validatorId: c.validatorId,
+          startedAt: c.startedAt,
+          finishedAt: c.finishedAt,
+          score: c.score,
+          agreementId: c.agreementId,
+          offerId: c.offerId,
+          providerId: c.providerId,
+          testResults: c.testResults,
+        })),
+      };
+
+      const stringifiedData = stringifyJSON(auditFile)!;
+      const cid = (await generateCID(stringifiedData)).toString();
+
+      // Add upload records for each uploader
+      for (const uploader of this.uploaders) {
+        await DB.addUploadRecord(
+          stringifiedData,
+          uploader.constructor.name,
+          this.actorInfo.id,
+          commitHash as Hex,
+          cid
+        );
+
+        this.logger.info(
+          `Upload record for ${colorHex(commitHash)} added with ${
+            uploader.constructor.name
+          }. It'll be processed by the upload checker.`
+        );
+      }
+    }
+  }
+
+  async checkUploads() {
+    // If there is already a checkUploads() call running, skip the current call
+    if (this.isUploadCheckerRunning) {
+      return;
+    }
+
+    this.isUploadCheckerRunning = true;
+    this.logger.info(`Checking uploads for Validator(${this.tag})...`);
+
+    const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
+    if (toBeUploaded.length == 0) {
+      this.logger.info(`No data found to upload`);
+      this.isUploadCheckerRunning = false;
+      return;
+    }
+
+    // Upload the data via uploaders that defined for this Validator
+    for (const upload of toBeUploaded) {
+      // No need to continue if the abort signal is received
+      this.checkAbort();
+
+      const uploader = this.uploaders.find(
+        (u) => u.constructor.name === upload.uploadedBy
+      );
+      if (!uploader) {
+        this.logger.warning(
+          `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
+        );
+        continue;
+      }
+
+      try {
+        await uploader.upload([
+          {
+            commitHash: upload.commitHash,
+            content: upload.content,
+          },
+        ]);
+        await DB.markAsUploaded(
+          upload.cid,
+          upload.commitHash,
+          this.actorInfo.id
+        );
+        this.logger.info(
+          `Data of ${colorHex(upload.commitHash)} uploaded with ${
+            uploader.constructor.name
+          }`
+        );
+      } catch (err: unknown) {
+        const error = ensureError(err);
+        this.logger.error(
+          `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
+        );
+      }
+    }
+
+    this.isUploadCheckerRunning = false;
   }
 
   /**
@@ -270,8 +420,9 @@ export class Validator {
               };
 
               // Calculate the CID of the audit file data
+              const stringifiedData = stringifyJSON(auditFile.data)!;
               const detailsLink = (
-                await generateCID(stringifyJSON(auditFile.data))
+                await generateCID(stringifiedData)
               ).toString();
 
               // Commit them to the blockchain
@@ -287,6 +438,7 @@ export class Validator {
                 chunk.map((validation) => validation.sessionId),
                 hash
               );
+
               this.logger.info(
                 `Hash (${colorHex(hash)}) of ${
                   chunk.length
@@ -420,15 +572,37 @@ export class Validator {
               })),
             };
 
+            const stringifiedData = stringifyJSON(auditFile.data)!;
+            const cid = (await generateCID(stringifiedData)).toString();
+
             // Call uploaders with the results
             for (const uploader of this.uploaders) {
               try {
+                // Save the data to be uploaded
+                const uploadData = await DB.addUploadRecord(
+                  stringifiedData,
+                  uploader.constructor.name,
+                  this.actorInfo.id,
+                  auditFile.commitHash as Hex,
+                  cid
+                );
+
+                // Upload the data
                 await uploader.upload([
                   {
                     commitHash: auditFile.commitHash,
-                    content: stringifyJSON(auditFile.data)!,
+                    content: stringifiedData,
                   },
                 ]);
+
+                // Mark the data as uploaded. If the upload was failed, the workflow won't reach
+                // at this line and this upload will be processed again by the upload checker (`this.checkUploads()`).
+                await DB.markAsUploaded(
+                  uploadData.cid,
+                  auditFile.commitHash as Hex,
+                  this.actorInfo.id
+                );
+
                 this.logger.info(
                   `Audit file of ${colorHex(auditFile.commitHash)} (including ${
                     auditFile.data.length
@@ -710,6 +884,10 @@ export class Validator {
    * Finalizes the current works from the queue and closes Pipe.
    */
   async clean() {
+    if (this.uploadCheckerInterval) {
+      clearInterval(this.uploadCheckerInterval);
+    }
+
     await this.rpcQueue.waitUntilEmpty();
     await this.pipe.close();
 
