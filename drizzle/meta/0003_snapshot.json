@@ -1,5 +1,5 @@
 {
-  "id": "3bce7a54-c1eb-4518-bb48-31343319b4cb",
+  "id": "6171d61c-0490-429f-8b64-008e41990977",
   "prevId": "490ffbd0-0525-4d56-a77c-eb1dd6aa7d54",
   "version": "7",
   "dialect": "postgresql",
@@ -184,19 +184,6 @@
           ],
           "columnsTo": [
             "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "uploads_commit_hash_validations_commit_hash_fk": {
-          "name": "uploads_commit_hash_validations_commit_hash_fk",
-          "tableFrom": "uploads",
-          "tableTo": "validations",
-          "columnsFrom": [
-            "commit_hash"
-          ],
-          "columnsTo": [
-            "commit_hash"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

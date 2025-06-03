@@ -58,10 +58,7 @@ export const uploadsTable = pgTable("uploads", {
   validatorId: integer("validator_id")
     .references(() => validatorsTable.id)
     .notNull(),
-  commitHash: varchar("commit_hash", { length: 70 })
-    .$type<Hex>()
-    .references(() => validationsTable.commitHash)
-    .notNull(),
+  commitHash: varchar("commit_hash", { length: 70 }).$type<Hex>().notNull(),
   uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
   uploadedAt: timestamp("uploaded_at"),
 });
