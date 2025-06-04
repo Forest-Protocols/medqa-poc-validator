@@ -63,7 +63,7 @@ export class PeerBenchUploader extends AbstractUploader {
     // Refresh the token 15 minutes before it expires
     this.refreshTokenInterval = setInterval(
       () => this.refreshToken(),
-      this.session!.expires_in - 15 * 60 * 1000
+      (this.session!.expires_in - 15 * 60) * 1000
     );
   }
 
