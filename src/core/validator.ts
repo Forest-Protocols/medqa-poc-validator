@@ -21,6 +21,9 @@ import {
   TimeoutError,
   stringifyJSON,
   generateCID,
+  tryParseJSON,
+  ProtocolDetails,
+  ProviderDetails,
 } from "@forest-protocols/sdk";
 import {
   Account,
@@ -41,7 +44,12 @@ import { rpcClient } from "./client";
 import { logger as mainLogger } from "./logger";
 import { Logger } from "winston";
 import { colorHex, colorNumber } from "./color";
-import { Resource, ValidationAuditFile, ValidatorConfiguration } from "./types";
+import {
+  AggregatedValidation,
+  Resource,
+  ValidationAuditFile,
+  ValidatorConfiguration,
+} from "./types";
 import { ensureError } from "@/utils/ensure-error";
 import { DB } from "@/database/client";
 import { pipes } from "./pipe";
@@ -56,6 +64,7 @@ import { join } from "path";
 import { isTermination } from "@/utils/is-termination";
 import { availableUploaders } from "./uploader";
 import { AbstractUploader } from "@/base/AbstractUploader";
+import { groupArray } from "@/utils/group-array";
 
 export class Validator {
   logger!: Logger;
@@ -74,6 +83,8 @@ export class Validator {
   private rpcQueue = new PromiseQueue();
   private uploadCheckerInterval?: NodeJS.Timeout;
   private isUploadCheckerRunning = false;
+  private providerNames: Record<number, string> = {};
+  private protocolName!: string;
 
   /**
    * Creates a new Validator instance for the given tag.
@@ -123,6 +134,30 @@ export class Validator {
 
     await validator.initActorInfo();
     await validator.initPipe(valConfig.operatorWalletPrivateKey);
+
+    // Get the Protocol name from the details file
+    const protocolDetailsLink = await validator.protocol.getDetailsLink();
+    const [protocolDetailsFile] = await DB.getDetailFiles([
+      protocolDetailsLink,
+    ]);
+
+    if (!protocolDetailsFile) {
+      throw new Error(
+        "Protocol details file is not found. Please place the details file of the Protocol under 'data/details' directory"
+      );
+    }
+
+    const protocolDetails = tryParseJSON<ProtocolDetails>(
+      protocolDetailsFile.content
+    );
+
+    // TODO: Validate details schema
+
+    if (!protocolDetails) {
+      throw new Error("Invalid protocol details file.");
+    }
+
+    validator.protocolName = protocolDetails.name;
 
     if (config.CLOSE_AGREEMENTS_AT_STARTUP) {
       validator.logger.info("Closing previous Agreements");
@@ -220,50 +255,22 @@ export class Validator {
     }
 
     // Group validations based on their hashes
-    const groupedValidations: Record<
-      Hex,
-      typeof unuploadedRevealedValidations
-    > = {};
-    for (const unrevealedValidation of unuploadedRevealedValidations) {
-      if (groupedValidations[unrevealedValidation.commitHash!] === undefined) {
-        groupedValidations[unrevealedValidation.commitHash!] = [];
-      }
-
-      groupedValidations[unrevealedValidation.commitHash!].push(
-        unrevealedValidation
-      );
-    }
+    const groupedValidations = groupArray(
+      unuploadedRevealedValidations,
+      (v) => v.commitHash!
+    );
 
     // Add those validations to the uploads table so the upload checker will upload them
     for (const [commitHash, validations] of Object.entries(
       groupedValidations
     )) {
       // Sort the validations to have consistent CID
-      validations.sort((a, b) =>
-        a.agreementId < b.agreementId
-          ? -1
-          : a.agreementId > b.agreementId
-          ? 1
-          : 0
+      this.sortValidations(validations);
+
+      const { stringifiedData, detailsLink } = await this.buildAuditFileObject(
+        commitHash as Hex,
+        validations
       );
-
-      const auditFile: ValidationAuditFile = {
-        commitHash: commitHash as Hex,
-        data: validations.map((c) => ({
-          sessionId: c.sessionId,
-          validatorId: c.validatorId,
-          startedAt: c.startedAt,
-          finishedAt: c.finishedAt,
-          score: c.score,
-          agreementId: c.agreementId,
-          offerId: c.offerId,
-          providerId: c.providerId,
-          testResults: c.testResults,
-        })),
-      };
-
-      const stringifiedData = stringifyJSON(auditFile.data)!;
-      const cid = (await generateCID(stringifiedData)).toString();
 
       // Add upload records for each uploader
       for (const uploader of this.uploaders) {
@@ -272,7 +279,7 @@ export class Validator {
           uploader.constructor.name,
           this.actorInfo.id,
           commitHash as Hex,
-          cid
+          detailsLink
         );
 
         this.logger.info(
@@ -383,13 +390,7 @@ export class Validator {
 
             try {
               // Sort the chunk to have consistent commitHash
-              chunk.sort((a, b) =>
-                a.agreementId < b.agreementId
-                  ? -1
-                  : a.agreementId > b.agreementId
-                  ? 1
-                  : 0
-              );
+              this.sortValidations(chunk);
 
               this.logger.debug(
                 `Commit Results Chunk: ${JSON.stringify(
@@ -412,27 +413,11 @@ export class Validator {
                 }))
               );
 
-              // Generate audit file data
-              const auditFile: ValidationAuditFile = {
-                commitHash: hash,
-                data: chunk.map((c) => ({
-                  sessionId: c.sessionId,
-                  validatorId: c.validatorId,
-                  startedAt: c.startedAt,
-                  finishedAt: c.finishedAt,
-                  score: c.score,
-                  agreementId: c.agreementId,
-                  offerId: c.offerId,
-                  providerId: c.providerId,
-                  testResults: c.testResults,
-                })),
-              };
-
-              // Calculate the CID of the audit file data
-              const stringifiedData = stringifyJSON(auditFile.data)!;
-              const detailsLink = (
-                await generateCID(stringifiedData)
-              ).toString();
+              // Get details link of the audit file data
+              const { detailsLink } = await this.buildAuditFileObject(
+                hash,
+                chunk
+              );
 
               // Commit them to the blockchain
               await this.slasher.commitResult(
@@ -501,19 +486,10 @@ export class Validator {
 
         // Group validations based on their hashes because we need to reveal
         // the validations that has the same hash at once.
-        const groupedValidations: Record<Hex, typeof unrevealedValidations> =
-          {};
-        for (const unrevealedValidation of unrevealedValidations) {
-          if (
-            groupedValidations[unrevealedValidation.commitHash!] === undefined
-          ) {
-            groupedValidations[unrevealedValidation.commitHash!] = [];
-          }
-
-          groupedValidations[unrevealedValidation.commitHash!].push(
-            unrevealedValidation
-          );
-        }
+        const groupedValidations = groupArray(
+          unrevealedValidations,
+          (v) => v.commitHash!
+        );
 
         for (const [commitHash, validations] of Object.entries(
           groupedValidations
@@ -524,13 +500,7 @@ export class Validator {
             // like we did when we were committing them. Otherwise
             // if the items of the array are in different positions
             // the hash will be different.
-            validations.sort((a, b) =>
-              a.agreementId < b.agreementId
-                ? -1
-                : a.agreementId > b.agreementId
-                ? 1
-                : 0
-            );
+            this.sortValidations(validations);
 
             this.logger.debug(
               `Reveal Chunk with hash ${colorHex(commitHash)}: ${JSON.stringify(
@@ -566,23 +536,8 @@ export class Validator {
             await DB.markAsRevealed(commitHash as Hex);
 
             // Generate audit file data
-            const auditFile: ValidationAuditFile = {
-              commitHash,
-              data: validations.map((v) => ({
-                sessionId: v.sessionId,
-                validatorId: v.validatorId,
-                startedAt: v.startedAt,
-                finishedAt: v.finishedAt,
-                score: v.score,
-                agreementId: v.agreementId,
-                offerId: v.offerId,
-                providerId: v.providerId,
-                testResults: v.testResults,
-              })),
-            };
-
-            const stringifiedData = stringifyJSON(auditFile.data)!;
-            const cid = (await generateCID(stringifiedData)).toString();
+            const { auditFile, stringifiedData, detailsLink } =
+              await this.buildAuditFileObject(commitHash as Hex, validations);
 
             // Call uploaders with the results
             for (const uploader of this.uploaders) {
@@ -593,7 +548,7 @@ export class Validator {
                   uploader.constructor.name,
                   this.actorInfo.id,
                   auditFile.commitHash as Hex,
-                  cid
+                  detailsLink
                 );
 
                 // Upload the data
@@ -703,6 +658,46 @@ export class Validator {
         ),
       ]);
       const formattedBalance = formatUnits(balance, DECIMALS.USDC);
+
+      // If we haven't cached the name of the Provider, get it over Pipe
+      if (this.providerNames[provider.id] === undefined) {
+        this.logger.info(
+          `Getting details of the Provider ${provider.id} (${colorHex(
+            provider.ownerAddr
+          )})`
+        );
+
+        const response = await this.pipe.send(provider.operatorAddr, {
+          method: PipeMethod.GET,
+          path: "/details",
+          body: [provider.detailsLink],
+          timeout: 15_000, // 15 seconds
+        });
+
+        if (response.code !== PipeResponseCode.OK) {
+          this.logger.error(
+            `Error while getting details of the Provider ${
+              provider.id
+            } (${colorHex(provider.ownerAddr)})`
+          );
+          throw new PipeError(response.code, response.body);
+        }
+
+        const [detailsFileContent] = response.body;
+        const details = tryParseJSON<ProviderDetails>(detailsFileContent);
+
+        if (!details) {
+          throw new Error(
+            `Invalid details file of the Provider ${provider.id} (${colorHex(
+              provider.ownerAddr
+            )})`
+          );
+        }
+
+        // TODO: Validate the details
+
+        this.providerNames[provider.id] = details.name;
+      }
 
       this.logger.info(
         `Current USDC balance: ${formattedBalance}`,
@@ -915,6 +910,40 @@ export class Validator {
     this.logger.debug(`Cleaned!`);
   }
 
+  private async buildAuditFileObject(
+    commitHash: Hex,
+    validations: AggregatedValidation[]
+  ) {
+    const auditFile: ValidationAuditFile = {
+      commitHash,
+      data: validations.map((v) => ({
+        sessionId: v.sessionId,
+        validatorId: v.validatorId,
+        startedAt: v.startedAt,
+        finishedAt: v.finishedAt,
+        score: v.score,
+        agreementId: v.agreementId,
+        offerId: v.offerId,
+        providerId: v.providerId,
+        testResults: v.testResults,
+
+        providerName: this.providerNames[v.providerId],
+        protocol: {
+          name: this.protocolName,
+          address: config.PROTOCOL_ADDRESS,
+        },
+      })),
+    };
+    const stringifiedData = stringifyJSON(auditFile.data)!;
+    const detailsLink = (await generateCID(stringifiedData)).toString();
+
+    return {
+      auditFile,
+      stringifiedData,
+      detailsLink,
+    };
+  }
+
   /**
    * Creates logger options (this includes context of the log)
    */
@@ -922,6 +951,12 @@ export class Validator {
     if (sessionId != "") sessionId = `/${sessionId}`;
 
     return { context: `Validator(${this.tag}${sessionId})` };
+  }
+
+  private sortValidations(validations: { agreementId: number }[]) {
+    validations.sort((a, b) =>
+      a.agreementId < b.agreementId ? -1 : a.agreementId > b.agreementId ? 1 : 0
+    );
   }
 
   private async initPipe(operatorPrivateKey: Hex) {

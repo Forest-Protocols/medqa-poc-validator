@@ -1,3 +1,4 @@
+import { DbValidation } from "@/database/schema";
 import { DeploymentStatus } from "@forest-protocols/sdk";
 import { Address, Hex } from "viem";
 
@@ -29,6 +30,8 @@ export type ValidationAuditFile = {
     score: number;
   })[];
 };
+
+export type AggregatedValidation = DbValidation & { testResults: TestResult[] };
 
 export type StructuredTestResults =
   | Record<string, unknown>
