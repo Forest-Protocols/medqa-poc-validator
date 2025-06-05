@@ -659,46 +659,6 @@ export class Validator {
       ]);
       const formattedBalance = formatUnits(balance, DECIMALS.USDC);
 
-      // If we haven't cached the name of the Provider, get it over Pipe
-      if (this.providerNames[provider.id] === undefined) {
-        this.logger.info(
-          `Getting details of the Provider ${provider.id} (${colorHex(
-            provider.ownerAddr
-          )})`
-        );
-
-        const response = await this.pipe.send(provider.operatorAddr, {
-          method: PipeMethod.GET,
-          path: "/details",
-          body: [provider.detailsLink],
-          timeout: 15_000, // 15 seconds
-        });
-
-        if (response.code !== PipeResponseCode.OK) {
-          this.logger.error(
-            `Error while getting details of the Provider ${
-              provider.id
-            } (${colorHex(provider.ownerAddr)})`
-          );
-          throw new PipeError(response.code, response.body);
-        }
-
-        const [detailsFileContent] = response.body;
-        const details = tryParseJSON<ProviderDetails>(detailsFileContent);
-
-        if (!details) {
-          throw new Error(
-            `Invalid details file of the Provider ${provider.id} (${colorHex(
-              provider.ownerAddr
-            )})`
-          );
-        }
-
-        // TODO: Validate the details
-
-        this.providerNames[provider.id] = details.name;
-      }
-
       this.logger.info(
         `Current USDC balance: ${formattedBalance}`,
         loggerOptions
@@ -910,29 +870,80 @@ export class Validator {
     this.logger.debug(`Cleaned!`);
   }
 
+  private async getProviderName(providerOrId: number | Actor) {
+    const providerId =
+      typeof providerOrId === "number" ? providerOrId : providerOrId.id;
+
+    if (this.providerNames[providerId] === undefined) {
+      this.logger.info(`Getting details of the Provider ${providerId}`);
+
+      const provider =
+        typeof providerOrId === "number"
+          ? await this.registry.getActor(providerId)
+          : providerOrId;
+
+      const response = await this.pipe.send(provider!.operatorAddr, {
+        method: PipeMethod.GET,
+        path: "/details",
+        body: [provider!.detailsLink],
+        timeout: 15_000, // 15 seconds
+      });
+
+      if (response.code !== PipeResponseCode.OK) {
+        this.logger.error(
+          `Error while getting details of the Provider ${
+            provider!.id
+          } (${colorHex(provider!.ownerAddr)})`
+        );
+        throw new PipeError(response.code, response.body);
+      }
+
+      const [detailsFileContent] = response.body;
+      const details = tryParseJSON<ProviderDetails>(detailsFileContent);
+
+      if (!details) {
+        throw new Error(
+          `Invalid details file of the Provider ${provider!.id} (${colorHex(
+            provider!.ownerAddr
+          )})`
+        );
+      }
+
+      // TODO: Validate the details
+
+      this.providerNames[provider!.id] = details.name;
+    }
+
+    return this.providerNames[providerId];
+  }
+
   private async buildAuditFileObject(
     commitHash: Hex,
     validations: AggregatedValidation[]
   ) {
     const auditFile: ValidationAuditFile = {
       commitHash,
-      data: validations.map((v) => ({
-        sessionId: v.sessionId,
-        validatorId: v.validatorId,
-        startedAt: v.startedAt,
-        finishedAt: v.finishedAt,
-        score: v.score,
-        agreementId: v.agreementId,
-        offerId: v.offerId,
-        providerId: v.providerId,
-        testResults: v.testResults,
+      data: await Promise.all(
+        validations.map(async (v) => {
+          return {
+            sessionId: v.sessionId,
+            validatorId: v.validatorId,
+            startedAt: v.startedAt,
+            finishedAt: v.finishedAt,
+            score: v.score,
+            agreementId: v.agreementId,
+            offerId: v.offerId,
+            providerId: v.providerId,
+            testResults: v.testResults,
 
-        providerName: this.providerNames[v.providerId],
-        protocol: {
-          name: this.protocolName,
-          address: config.PROTOCOL_ADDRESS,
-        },
-      })),
+            providerName: await this.getProviderName(v.providerId),
+            protocol: {
+              name: this.protocolName,
+              address: config.PROTOCOL_ADDRESS,
+            },
+          };
+        })
+      ),
     };
     const stringifiedData = stringifyJSON(auditFile.data)!;
     const detailsLink = (await generateCID(stringifiedData)).toString();
