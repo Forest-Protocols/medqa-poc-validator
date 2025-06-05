@@ -94,6 +94,7 @@ export class PeerBenchUploader extends AbstractUploader {
         }
 
         this.session = data.session;
+        this.token = this.session?.access_token;
         break;
       } catch (err) {
         this.logger.debug(
