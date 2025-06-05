@@ -65,6 +65,7 @@ async function clearEvaluationsDirectory() {
 
 // Entry point of the daemon
 async function main() {
+  let failed = false;
   try {
     // Initialize
     await loadDetailFiles();
@@ -74,10 +75,11 @@ async function main() {
     // Start blockchain listener to keep track of Reveal and Commit windows
     listenToBlockchain().catch((err) => logError({ err, logger }));
   } catch (err) {
+    failed = true;
     logError({ err, logger });
   }
 
-  if (!abortController.signal.aborted) {
+  if (!abortController.signal.aborted && !failed) {
     // Start all of the executors
     await Promise.all(executors.map((executor) => executor.start()));
   }
