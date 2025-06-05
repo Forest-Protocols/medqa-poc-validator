@@ -659,6 +659,9 @@ export class Validator {
       ]);
       const formattedBalance = formatUnits(balance, DECIMALS.USDC);
 
+      // Update the cache with the Provider name
+      await this.getProviderName(provider);
+
       this.logger.info(
         `Current USDC balance: ${formattedBalance}`,
         loggerOptions
