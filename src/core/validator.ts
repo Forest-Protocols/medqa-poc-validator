@@ -78,13 +78,13 @@ export class Validator {
   details!: ValidatorDetails;
   actorInfo!: Actor;
   usdc!: GetContractReturnType<typeof erc20Abi, PublicClient | WalletClient>;
+  uploaders: AbstractUploader[] = [];
+  providerNames: Record<number, string> = {};
+  protocolName!: string;
 
-  private uploaders: AbstractUploader[] = [];
   private rpcQueue = new PromiseQueue();
   private uploadCheckerInterval?: NodeJS.Timeout;
   private isUploadCheckerRunning = false;
-  private providerNames: Record<number, string> = {};
-  private protocolName!: string;
 
   /**
    * Creates a new Validator instance for the given tag.
