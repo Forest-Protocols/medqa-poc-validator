@@ -43,7 +43,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { rpcClient } from "./client";
 import { logger as mainLogger } from "./logger";
 import { Logger } from "winston";
-import { colorHex, colorNumber } from "./color";
+import { colorHex, colorKeyword, colorNumber } from "./color";
 import {
   AggregatedValidation,
   Resource,
@@ -439,7 +439,7 @@ export class Validator {
                   chunk.length
                 } validations are committed to the blockchain (commit hash: ${colorHex(
                   hash
-                )})`
+                )}, detailsLink: ${colorKeyword(detailsLink)})`
               );
             } catch (err: unknown) {
               if (isTermination(err)) {
@@ -573,14 +573,18 @@ export class Validator {
                 this.logger.info(
                   `Audit file of ${colorHex(auditFile.commitHash)} (including ${
                     auditFile.data.length
-                  } sessions) uploaded with ${uploader.constructor.name}`
+                  } sessions, detailsLink: ${colorKeyword(
+                    detailsLink
+                  )}) uploaded with ${uploader.constructor.name}`
                 );
               } catch (err: unknown) {
                 const error = ensureError(err);
                 this.logger.error(
                   `Error while uploading results of ${colorHex(
                     auditFile.commitHash
-                  )} with ${uploader.constructor.name}: ${error.stack}`
+                  )} (detailsLink: ${colorKeyword(detailsLink)}) with ${
+                    uploader.constructor.name
+                  }: ${error.stack}`
                 );
               }
             }
