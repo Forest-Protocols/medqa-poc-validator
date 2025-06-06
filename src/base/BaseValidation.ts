@@ -7,6 +7,7 @@ import { logger as mainLogger } from "@/core/logger";
 import { config } from "@/core/config";
 import { AbstractPipe } from "@forest-protocols/sdk";
 import { isTermination } from "@/utils/is-termination";
+import { Validator } from "@/core/validator";
 
 export class BaseValidation<
   T extends Record<string, unknown> = {},
@@ -15,6 +16,7 @@ export class BaseValidation<
   protected logger!: Logger;
   protected sessionId!: string;
   protected validatorTag!: string;
+  protected validator!: Validator;
   protected pipe!: AbstractPipe;
   protected readonly tests: AbstractTestConstructor[] = [];
 
@@ -59,6 +61,7 @@ export class BaseValidation<
     validation._resource = resource;
     validation.sessionId = sessionId;
     validation.pipe = config.validators[validatorTag].pipe;
+    validation.validator = config.validators[validatorTag];
 
     return validation;
   }
