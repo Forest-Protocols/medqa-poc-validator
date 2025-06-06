@@ -69,12 +69,7 @@ export class BaseValidation<
   async start(): Promise<TestResult[]> {
     const testResults: TestResult[] = [];
 
-    const errorHandler = (methodName: string, err: unknown) => {
-      const error = ensureError(err);
-      this.logger.error(`Error in ${methodName}() method: ${error.stack}`);
-    };
-
-    await this.onStart().catch((err) => errorHandler("onStart", err));
+    await this.onStart();
 
     if (this.tests.length == 0) {
       throw new Error("Please add at least one Test to the validation");
@@ -101,7 +96,7 @@ export class BaseValidation<
         this.logger.error(`Error while executing ${testName}: ${error.stack}`);
       }
     }
-    await this.onFinish().catch((err) => errorHandler("onFinish", err));
+    await this.onFinish();
 
     return testResults;
   }
