@@ -48,10 +48,6 @@ export class BaseValidation<
   ) {
     const validation = new this();
 
-    if (validation.tests.length == 0) {
-      throw new Error("Please add at least one Test to the validation");
-    }
-
     validation.logger = mainLogger.child({
       context: `Validator(${validatorTag}/${sessionId})`,
     });
@@ -79,6 +75,10 @@ export class BaseValidation<
     };
 
     await this.onStart().catch((err) => errorHandler("onStart", err));
+
+    if (this.tests.length == 0) {
+      throw new Error("Please add at least one Test to the validation");
+    }
 
     for (let i = 0; i < this.tests.length; i++) {
       const Test = this.tests[i];
