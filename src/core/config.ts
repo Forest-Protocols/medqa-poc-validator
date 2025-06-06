@@ -208,9 +208,15 @@ function parseEnvVariables() {
           return value.split(",").map((uploader) => uploader.trim());
         }),
 
-      PEERBENCH_UPLOADER_SUPABASE_ANON_KEY: z.string().optional(),
-      PEERBENCH_UPLOADER_SUPABASE_URL: z.string().optional(),
-      PEERBENCH_API_URL: z.string().optional(),
+      PEERBENCH_UPLOADER_SUPABASE_ANON_KEY: z
+        .string()
+        .default(
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3bnNlcmJqanR4Z2theWRrbXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5OTczMDQsImV4cCI6MjA2MTU3MzMwNH0.hzPhuPtDYF1yMrKseoZX-P6ETpPEsGIC8mt-bieG6Kc"
+        ),
+      PEERBENCH_UPLOADER_SUPABASE_URL: z
+        .string()
+        .default("https://bwnserbjjtxgkaydkmtk.supabase.co"),
+      PEERBENCH_API_URL: z.string().default("https://peerbench.ai/api"),
     })
     .superRefine((value, ctx) => {
       if (
