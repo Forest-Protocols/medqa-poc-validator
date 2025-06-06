@@ -368,7 +368,7 @@ export class Validator {
           this.actorInfo.id
         );
 
-        // If there are enough validations we are going to commit them
+        // If there are enough validations then we are going to commit them
         if (uncommittedValidations.length < config.MAX_VALIDATION_TO_COMMIT) {
           return;
         }
@@ -427,16 +427,19 @@ export class Validator {
                 detailsLink
               );
 
-              // Save the commit hash to the database
+              // Set commit hash of the relevant validations in the database to
+              // keep track of whether they are committed or not.
               await DB.setCommitHash(
                 chunk.map((validation) => validation.sessionId),
                 hash
               );
 
               this.logger.info(
-                `Hash (${colorHex(hash)}) of ${
+                `${
                   chunk.length
-                } validations is committed to the blockchain`
+                } validations are committed to the blockchain (commit hash: ${colorHex(
+                  hash
+                )})`
               );
             } catch (err: unknown) {
               if (isTermination(err)) {
@@ -927,25 +930,23 @@ export class Validator {
     const auditFile: ValidationAuditFile = {
       commitHash,
       data: await Promise.all(
-        validations.map(async (v) => {
-          return {
-            sessionId: v.sessionId,
-            validatorId: v.validatorId,
-            startedAt: v.startedAt,
-            finishedAt: v.finishedAt,
-            score: v.score,
-            agreementId: v.agreementId,
-            offerId: v.offerId,
-            providerId: v.providerId,
-            testResults: v.testResults,
+        validations.map(async (v) => ({
+          sessionId: v.sessionId,
+          validatorId: v.validatorId,
+          startedAt: v.startedAt,
+          finishedAt: v.finishedAt,
+          score: v.score,
+          agreementId: v.agreementId,
+          offerId: v.offerId,
+          providerId: v.providerId,
+          testResults: v.testResults,
 
-            providerName: await this.getProviderName(v.providerId),
-            protocol: {
-              name: this.protocolName,
-              address: config.PROTOCOL_ADDRESS,
-            },
-          };
-        })
+          providerName: await this.getProviderName(v.providerId),
+          protocol: {
+            name: this.protocolName,
+            address: config.PROTOCOL_ADDRESS,
+          },
+        }))
       ),
     };
     const stringifiedData = stringifyJSON(auditFile.data)!;
