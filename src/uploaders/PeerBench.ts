@@ -22,15 +22,11 @@ export class PeerBenchUploader extends AbstractUploader {
   constructor(validator: Validator) {
     super(validator);
 
-    // If there are defined environment variables, use them.
-    // Otherwise use the default ones.
     this.supabaseClient = createClient(
-      config.PEERBENCH_UPLOADER_SUPABASE_URL ||
-        "https://bwnserbjjtxgkaydkmtk.supabase.co",
-      config.PEERBENCH_UPLOADER_SUPABASE_ANON_KEY ||
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3bnNlcmJqanR4Z2theWRrbXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5OTczMDQsImV4cCI6MjA2MTU3MzMwNH0.hzPhuPtDYF1yMrKseoZX-P6ETpPEsGIC8mt-bieG6Kc"
+      config.PEERBENCH_UPLOADER_SUPABASE_URL,
+      config.PEERBENCH_UPLOADER_SUPABASE_ANON_KEY
     );
-    this.apiURL = config.PEERBENCH_API_URL || "https://peerbench.ai/api";
+    this.apiURL = config.PEERBENCH_API_URL;
   }
 
   async init(): Promise<void> {
