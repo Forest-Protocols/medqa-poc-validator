@@ -13,12 +13,12 @@ export class BaseValidation<
   T extends Record<string, unknown> = {},
   K extends Record<string, unknown> = {}
 > {
-  protected logger!: Logger;
-  protected sessionId!: string;
-  protected validatorTag!: string;
-  protected validator!: Validator;
-  protected pipe!: AbstractPipe;
-  protected readonly tests: AbstractTestConstructor[] = [];
+  logger!: Logger;
+  sessionId!: string;
+  validatorTag!: string;
+  validator!: Validator;
+  pipe!: AbstractPipe;
+  readonly tests: AbstractTestConstructor[] = [];
 
   private _resource!: Resource;
 
