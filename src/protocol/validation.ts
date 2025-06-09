@@ -1,9 +1,11 @@
 import { TestResult } from "@/core/types";
 import { BaseValidation } from "@/base/BaseValidation";
-import { ExampleTest } from "./tests/ExampleTest";
-import { PipeMethod } from "@forest-protocols/sdk";
 import { AbstractTestConstructor } from "@/base/AbstractTest";
-import { ExampleHumanEvaluation } from "./tests/ExampleHumanEvaluation";
+import { Prompt, PromptSet, PromptSetSchema } from "./types";
+import { config } from "@/core/config";
+import axios from "axios";
+import { PeerBenchUploader } from "@/uploaders/PeerBench";
+import { PromptTest } from "./tests/PromptTest";
 
 /**
  * Define the general necessary actions for your tests.
@@ -12,63 +14,100 @@ export class Validation extends BaseValidation {
   override parameters = {
     /** Default value for parameters of the Validation process */
   };
-  override readonly tests: AbstractTestConstructor[] = [
-    /**
-     * TODO: Place Test implementations
-     */
-    ExampleHumanEvaluation,
-    ExampleTest,
-  ];
+  override readonly tests: AbstractTestConstructor[] = [];
 
-  /**
-   * Executed before starting to the validation.
-   */
+  promptSet!: PromptSet;
+  prompts: Prompt[] = [];
+
   override async onStart() {
-    /**
-     * TODO: Implement me, if needed
-     */
+    await this.initializePrompts();
+
+    // Add PromptTest for each prompt
+    for (let i = 0; i < this.prompts.length; i++) {
+      this.tests.push(PromptTest);
+    }
   }
 
-  /**
-   * Executed after all of the Tests are run.
-   */
-  override async onFinish() {
-    /**
-     * TODO: Implement me, if needed
-     */
-  }
-
-  /**
-   * Calculates score of the Provider for this validation.
-   */
   override async calculateScore(testResults: TestResult[]): Promise<number> {
-    let score = 0;
+    // Sum up the number of successful tests
+    return testResults.reduce(
+      (acc, testResult) => acc + (testResult.isSuccess ? 1 : 0),
+      0
+    );
+  }
 
-    for (const testResult of testResults) {
-      /**
-       * TODO: Implement me
-       *
-       * An example implementation that gives 1 point
-       * for each successfully completed `ExampleTest`.
-       */
-      if (testResult.isSuccess && testResult.testName == ExampleTest.name) {
-        score += 1;
+  /**
+   * Fetch the prompts from PeerBench server
+   */
+  async initializePrompts() {
+    // Get token from PeerBench uploader since it already has it
+    const validator = config.validators[this.validatorTag];
+    let uploader: PeerBenchUploader | undefined;
+
+    for (const valUploader of validator.uploaders) {
+      if (valUploader instanceof PeerBenchUploader) {
+        uploader = valUploader;
       }
     }
 
-    return score;
+    if (!uploader) {
+      throw new Error(
+        "Validation uses the token from PeerBenchUploader class. In order to fetch prompts from the server, please enable that uploader via the env variable"
+      );
+    }
+
+    if (!uploader.token) {
+      throw new Error(
+        "PeerBenchUploader class has no token. Please check if PeerBenchUploader class is working properly"
+      );
+    }
+
+    await this.fetchPromptSet(uploader.token);
+    await this.fetchPrompts(uploader.token);
   }
 
   /**
-   * TODO: Add additional functions that needed by the tests
-   *
-   * An example one that calls Pipe endpoints:
+   * Fetch the prompt set from PeerBench server
    */
-  async callEndpoint(path: `/${string}`, body: any) {
-    return await this.pipe.send(this.resource.operatorAddress, {
-      path,
-      method: PipeMethod.GET,
-      body,
+  async fetchPromptSet(token: string) {
+    this.logger.info(`Fetching MedQA prompt set from the server.`);
+    const response = await axios.get(
+      `${config.PEERBENCH_API_URL}/prompt-sets/24`, // MedQA prompt set id
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    this.promptSet = PromptSetSchema.parse(response.data);
+  }
+
+  /**
+   * Fetch prompts for the chosen prompt set
+   */
+  async fetchPrompts(token: string) {
+    this.logger.info(
+      `Fetching prompts for prompt set "${this.promptSet.title}" (id: ${this.promptSet.id})`
+    );
+
+    const pageSize = config.PROMPT_PER_VALIDATION;
+    const totalPages = Math.ceil(this.promptSet.questionCount / pageSize);
+    const page = Math.floor(Math.random() * totalPages);
+
+    this.logger.debug(
+      `page: ${page}, totalPages: ${totalPages}, pageSize: ${pageSize}, promptSet.questionCount: ${this.promptSet.questionCount}`
+    );
+
+    const response = await axios.get(`${config.PEERBENCH_API_URL}/prompts`, {
+      params: {
+        promptSetId: this.promptSet.id,
+        page,
+        pageSize,
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
+    this.prompts = response.data;
   }
 }

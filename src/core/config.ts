@@ -207,7 +207,6 @@ function parseEnvVariables() {
 
           return value.split(",").map((uploader) => uploader.trim());
         }),
-
       PEERBENCH_UPLOADER_SUPABASE_ANON_KEY: z
         .string()
         .default(
@@ -217,6 +216,7 @@ function parseEnvVariables() {
         .string()
         .default("https://bwnserbjjtxgkaydkmtk.supabase.co"),
       PEERBENCH_API_URL: z.string().default("https://peerbench.ai/api"),
+      PROMPT_PER_VALIDATION: z.coerce.number().default(20),
     })
     .superRefine((value, ctx) => {
       if (

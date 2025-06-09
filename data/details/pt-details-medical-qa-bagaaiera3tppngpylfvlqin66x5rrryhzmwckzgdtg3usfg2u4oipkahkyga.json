@@ -1,0 +1,24 @@
+{
+  "name": "Medical Q&A",
+  "softwareStack": "LLM",
+  "offerParams": [{
+    "name": "Input Limit",
+    "unit": "tokens",
+    "priority": 100,
+    "isPrimary": true
+  }, {
+    "name": "Output Limit",
+    "unit": "tokens",
+    "priority": 90,
+    "isPrimary": true
+  }, {
+    "name": "Context Size",
+    "unit": "tokens",
+    "priority": 80,
+    "isPrimary": true
+  }, {
+    "name": "Requests Limit",
+    "unit": "item",
+    "priority": 60
+  }]
+}
