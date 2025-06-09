@@ -208,18 +208,13 @@ export class Validator {
       validator.uploaders.push(uploader);
     }
 
-    // Check the corresponding uploads for validations that are already revealed and saved to the database
-    await validator.checkExistingValidationsToBeUploaded();
-
-    if (validator.uploaders.length > 0) {
-      // At startup check the uploads then start the interval for continuous checking
-      validator.checkUploads().then(() => {
-        validator.uploadCheckerInterval = setInterval(
-          () => validator.checkUploads(),
-          config.UPLOAD_CHECKER_INTERVAL
-        );
-      });
-    }
+    // At startup check the uploads then start the interval for continuous checking
+    validator.checkUploads().then(() => {
+      validator.uploadCheckerInterval = setInterval(
+        () => validator.checkUploads(),
+        config.UPLOAD_CHECKER_INTERVAL
+      );
+    });
 
     return validator;
   }
@@ -264,28 +259,33 @@ export class Validator {
     for (const [commitHash, validations] of Object.entries(
       groupedValidations
     )) {
-      // Sort the validations to have consistent CID
-      this.sortValidations(validations);
+      try {
+        // Sort the validations to have consistent CID
+        this.sortValidations(validations);
 
-      const { stringifiedData, detailsLink } = await this.buildAuditFileObject(
-        commitHash as Hex,
-        validations
-      );
+        const { stringifiedData, detailsLink } =
+          await this.buildAuditFileObject(commitHash as Hex, validations);
 
-      // Add upload records for each uploader
-      for (const uploader of this.uploaders) {
-        await DB.addUploadRecord(
-          stringifiedData,
-          uploader.constructor.name,
-          this.actorInfo.id,
-          commitHash as Hex,
-          detailsLink
-        );
+        // Add upload records for each uploader
+        for (const uploader of this.uploaders) {
+          await DB.addUploadRecord(
+            stringifiedData,
+            uploader.constructor.name,
+            this.actorInfo.id,
+            commitHash as Hex,
+            detailsLink
+          );
 
-        this.logger.info(
-          `Added upload record for commit ${colorHex(commitHash)} via  ${
-            uploader.constructor.name
-          }. It'll be processed by the upload checker.`
+          this.logger.info(
+            `Added upload record for commit ${colorHex(commitHash)} via  ${
+              uploader.constructor.name
+            }. It'll be processed by the upload checker.`
+          );
+        }
+      } catch (err: unknown) {
+        const error = ensureError(err);
+        this.logger.error(
+          `Error while adding upload records for revealed validations: ${error.stack}`
         );
       }
     }
@@ -298,7 +298,10 @@ export class Validator {
     }
 
     this.isUploadCheckerRunning = true;
-    this.logger.info(`Checking uploads for Validator(${this.tag})...`);
+    this.logger.info(`Checking uploads...`);
+
+    // Check if all of the validations have corresponding upload records on the database.
+    await this.checkExistingValidationsToBeUploaded();
 
     const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
     if (toBeUploaded.length == 0) {
