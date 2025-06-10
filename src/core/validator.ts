@@ -966,7 +966,19 @@ export class Validator {
           agreementId: v.agreementId,
           offerId: v.offerId,
           providerId: v.providerId,
-          testResults: v.testResults,
+
+          // We need to sort the test results to have deterministic CID calculation.
+          // Test names might be the same, that's why we are sorting them based on
+          // their stringified versions. This approach is undeniably deterministic
+          // since we are using `stringifyJSON` which produces deterministic output
+          // and that result cannot be exactly the same for two different objects.
+          // Even if the results are the same, the order of the objects won't make any difference
+          testResults: [...v.testResults].sort((a, b) => {
+            const stringifiedA = stringifyJSON(a.result as any)!;
+            const stringifiedB = stringifyJSON(b.result as any)!;
+
+            return stringifiedA.localeCompare(stringifiedB);
+          }),
 
           providerName: await this.getProviderName(v.providerId),
           protocol: {
