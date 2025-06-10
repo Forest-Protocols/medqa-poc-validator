@@ -417,10 +417,8 @@ export class Validator {
               );
 
               // Get details link of the audit file data
-              const { detailsLink } = await this.buildAuditFileObject(
-                hash,
-                chunk
-              );
+              const { detailsLink, stringifiedData } =
+                await this.buildAuditFileObject(hash, chunk);
 
               // Commit them to the blockchain
               await this.slasher.commitResult(
@@ -443,6 +441,17 @@ export class Validator {
                 } validations are committed to the blockchain (commit hash: ${colorHex(
                   hash
                 )}, detailsLink: ${colorKeyword(detailsLink)})`
+              );
+
+              // Log data for debugging
+              this.logger.debug(
+                `JSON.stringify chunk and stringifiedData data for commit hash ${colorHex(
+                  hash
+                )}:\nchunk: ${JSON.stringify(
+                  chunk,
+                  null,
+                  2
+                )}\n\nstringifiedData: ${stringifiedData}`
               );
             } catch (err: unknown) {
               if (isTermination(err)) {
@@ -579,6 +588,17 @@ export class Validator {
                   } sessions, detailsLink: ${colorKeyword(
                     detailsLink
                   )}) uploaded with ${uploader.constructor.name}`
+                );
+
+                // Log data for debugging
+                this.logger.debug(
+                  `JSON.stringify validations and stringifiedData data for commit hash ${colorHex(
+                    auditFile.commitHash
+                  )}\nvalidations: ${JSON.stringify(
+                    validations,
+                    null,
+                    2
+                  )}\n\nstringifiedData: ${stringifiedData}`
                 );
               } catch (err: unknown) {
                 const error = ensureError(err);
