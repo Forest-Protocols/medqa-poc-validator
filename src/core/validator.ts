@@ -417,10 +417,8 @@ export class Validator {
               );
 
               // Get details link of the audit file data
-              const { detailsLink } = await this.buildAuditFileObject(
-                hash,
-                chunk
-              );
+              const { detailsLink, stringifiedData } =
+                await this.buildAuditFileObject(hash, chunk);
 
               // Commit them to the blockchain
               await this.slasher.commitResult(
@@ -443,6 +441,17 @@ export class Validator {
                 } validations are committed to the blockchain (commit hash: ${colorHex(
                   hash
                 )}, detailsLink: ${colorKeyword(detailsLink)})`
+              );
+
+              // Log data for debugging
+              this.logger.debug(
+                `JSON.stringify chunk and stringifiedData data for commit hash ${colorHex(
+                  hash
+                )}:\nchunk: ${JSON.stringify(
+                  chunk,
+                  null,
+                  2
+                )}\n\nstringifiedData: ${stringifiedData}`
               );
             } catch (err: unknown) {
               if (isTermination(err)) {
@@ -579,6 +588,17 @@ export class Validator {
                   } sessions, detailsLink: ${colorKeyword(
                     detailsLink
                   )}) uploaded with ${uploader.constructor.name}`
+                );
+
+                // Log data for debugging
+                this.logger.debug(
+                  `JSON.stringify validations and stringifiedData data for commit hash ${colorHex(
+                    auditFile.commitHash
+                  )}\nvalidations: ${JSON.stringify(
+                    validations,
+                    null,
+                    2
+                  )}\n\nstringifiedData: ${stringifiedData}`
                 );
               } catch (err: unknown) {
                 const error = ensureError(err);
@@ -946,7 +966,19 @@ export class Validator {
           agreementId: v.agreementId,
           offerId: v.offerId,
           providerId: v.providerId,
-          testResults: v.testResults,
+
+          // We need to sort the test results to have deterministic CID calculation.
+          // Test names might be the same, that's why we are sorting them based on
+          // their stringified versions. This approach is undeniably deterministic
+          // since we are using `stringifyJSON` which produces deterministic output
+          // and that result cannot be exactly the same for two different objects.
+          // Even if the results are the same, the order of the objects won't make any difference
+          testResults: [...v.testResults].sort((a, b) => {
+            const stringifiedA = stringifyJSON(a.result as any)!;
+            const stringifiedB = stringifyJSON(b.result as any)!;
+
+            return stringifiedA.localeCompare(stringifiedB);
+          }),
 
           providerName: await this.getProviderName(v.providerId),
           protocol: {

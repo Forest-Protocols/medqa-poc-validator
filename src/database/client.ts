@@ -354,9 +354,6 @@ class DatabaseClient {
             'result', ${schema.testResultsTable.result},
             'testName', ${schema.testResultsTable.testName}
           )
-          ORDER BY ${
-            schema.testResultsTable.testName
-          } -- Sort that array to have deterministic results
         )
         FILTER(
           WHERE ${isNotNull(schema.testResultsTable.sessionId)}
