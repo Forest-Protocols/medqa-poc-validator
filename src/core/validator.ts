@@ -300,57 +300,62 @@ export class Validator {
     this.isUploadCheckerRunning = true;
     this.logger.info(`Checking uploads...`);
 
-    // Check if all of the validations have corresponding upload records on the database.
-    await this.checkExistingValidationsToBeUploaded();
+    try {
+      // Check if all of the validations have corresponding upload records on the database.
+      await this.checkExistingValidationsToBeUploaded();
 
-    const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
-    if (toBeUploaded.length == 0) {
-      this.logger.info(`No data found to upload`);
+      const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
+      if (toBeUploaded.length == 0) {
+        this.logger.info(`No data found to upload`);
+        this.isUploadCheckerRunning = false;
+        return;
+      }
+
+      // Upload the data via uploaders that defined for this Validator
+      for (const upload of toBeUploaded) {
+        // No need to continue if the abort signal is received
+        this.checkAbort();
+
+        const uploader = this.uploaders.find(
+          (u) => u.constructor.name === upload.uploadedBy
+        );
+        if (!uploader) {
+          this.logger.warning(
+            `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
+          );
+          continue;
+        }
+
+        try {
+          await uploader.upload([
+            {
+              commitHash: upload.commitHash,
+              content: upload.content,
+            },
+          ]);
+          await DB.markAsUploaded(
+            upload.cid,
+            upload.commitHash,
+            this.actorInfo.id
+          );
+          this.logger.info(
+            `Data of ${colorHex(upload.commitHash)} uploaded with ${
+              uploader.constructor.name
+            }`
+          );
+        } catch (err: unknown) {
+          const error = ensureError(err);
+          this.logger.error(
+            `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
+          );
+        }
+      }
+    } catch (err: unknown) {
+      const error = ensureError(err);
+      this.logger.error(`Error while checking uploads: ${error.stack}`);
+    } finally {
       this.isUploadCheckerRunning = false;
-      return;
     }
-
-    // Upload the data via uploaders that defined for this Validator
-    for (const upload of toBeUploaded) {
-      // No need to continue if the abort signal is received
-      this.checkAbort();
-
-      const uploader = this.uploaders.find(
-        (u) => u.constructor.name === upload.uploadedBy
-      );
-      if (!uploader) {
-        this.logger.warning(
-          `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
-        );
-        continue;
-      }
-
-      try {
-        await uploader.upload([
-          {
-            commitHash: upload.commitHash,
-            content: upload.content,
-          },
-        ]);
-        await DB.markAsUploaded(
-          upload.cid,
-          upload.commitHash,
-          this.actorInfo.id
-        );
-        this.logger.info(
-          `Data of ${colorHex(upload.commitHash)} uploaded with ${
-            uploader.constructor.name
-          }`
-        );
-      } catch (err: unknown) {
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
-        );
-      }
-    }
-
-    this.isUploadCheckerRunning = false;
   }
 
   /**
