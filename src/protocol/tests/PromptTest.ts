@@ -7,7 +7,6 @@ import { ChatCompletion } from "openai/resources/index";
 
 export type PromptTestResult = {
   modelId: string;
-  provider: string;
   response: string;
   promptId: string;
 };
@@ -75,7 +74,6 @@ export class PromptTest extends PerformanceTest<PromptTestResult, Validation> {
       raw: JSON.stringify(completion),
       result: {
         modelId: completion.model,
-        provider: "openrouter.ai", // TODO: This info also has to be fetched from the provider
         response: chatResponse,
         promptId: prompt.id,
       },
