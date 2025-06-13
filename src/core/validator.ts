@@ -534,27 +534,6 @@ export class Validator {
               )}`
             );
 
-            // Reveal the results to the blockchain
-            await this.slasher.revealResult(
-              commitHash as Hex,
-              this.actorInfo.ownerAddr,
-              config.PROTOCOL_ADDRESS,
-              validations.map((validation) => ({
-                agreementId: validation.agreementId,
-                provId: validation.providerId,
-                score: BigInt(validation.score),
-              }))
-            );
-
-            this.logger.info(
-              `${
-                validations.length
-              } validations are revealed (commit hash: ${colorHex(commitHash)})`
-            );
-
-            // Mark validations as revealed in the database
-            await DB.markAsRevealed(commitHash as Hex);
-
             // Generate audit file data
             const { auditFile, stringifiedData, detailsLink } =
               await this.buildAuditFileObject(commitHash as Hex, validations);
@@ -616,6 +595,27 @@ export class Validator {
                 );
               }
             }
+
+            // Reveal the results to the blockchain
+            await this.slasher.revealResult(
+              commitHash as Hex,
+              this.actorInfo.ownerAddr,
+              config.PROTOCOL_ADDRESS,
+              validations.map((validation) => ({
+                agreementId: validation.agreementId,
+                provId: validation.providerId,
+                score: BigInt(validation.score),
+              }))
+            );
+
+            this.logger.info(
+              `${
+                validations.length
+              } validations are revealed (commit hash: ${colorHex(commitHash)})`
+            );
+
+            // Mark validations as revealed in the database
+            await DB.markAsRevealed(commitHash as Hex);
           } catch (err: unknown) {
             if (isTermination(err)) {
               return;
