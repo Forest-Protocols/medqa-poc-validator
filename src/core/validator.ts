@@ -24,6 +24,7 @@ import {
   tryParseJSON,
   ProtocolDetails,
   ProviderDetails,
+  IndexerAgreement,
 } from "@forest-protocols/sdk";
 import {
   Account,
@@ -40,7 +41,7 @@ import {
 } from "viem";
 import { config } from "./config";
 import { privateKeyToAccount } from "viem/accounts";
-import { rpcClient } from "./client";
+import { indexerClient, rpcClient } from "./client";
 import { logger as mainLogger } from "./logger";
 import { Logger } from "winston";
 import { colorHex, colorKeyword, colorNumber } from "./color";
@@ -161,17 +162,37 @@ export class Validator {
 
     if (config.CLOSE_AGREEMENTS_AT_STARTUP) {
       validator.logger.info("Closing previous Agreements");
-      const agreements = await validator.protocol.getAllUserAgreements(
-        validator.actorInfo.ownerAddr
-      );
-      const activeAgreements = agreements.filter(
-        (agreement) => agreement.status === Status.Active
-      );
 
-      if (activeAgreements.length == 0) {
+      // Get all active Agreements of this Validator
+      const allAgreements: IndexerAgreement[] = [];
+      let page = 1;
+
+      while (true) {
+        const res = await indexerClient.getAgreements({
+          protocolAddress: config.PROTOCOL_ADDRESS,
+          status: Status.Active,
+          userAddress: validator.actorInfo.ownerAddr,
+          page,
+          limit: 100,
+        });
+
+        allAgreements.push(...res.data);
+
+        if (res.pagination.totalPages <= page) {
+          break;
+        }
+
+        page++;
+        validator.logger.debug(
+          `Fetched page ${page} of active Agreements currently ${allAgreements.length} active Agreements found`
+        );
+      }
+
+      if (allAgreements.length == 0) {
         validator.logger.info("No active Agreements found");
       }
-      for (const agreement of activeAgreements) {
+
+      for (const agreement of allAgreements) {
         await validator.closeAgreement(agreement.id);
       }
     }
