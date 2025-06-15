@@ -1,8 +1,7 @@
-import { rpcClient } from "@/core/client";
+import { indexerClient } from "@/core/client";
 import { colorHex, colorNumber } from "@/core/color";
 import { config } from "@/core/config";
 import { logError, logger as mainLogger } from "@/core/logger";
-import { Slasher } from "@forest-protocols/sdk";
 import { ensureError } from "@/utils/ensure-error";
 import { abortController } from "./signal";
 import { sleep } from "@/utils/sleep";
@@ -10,23 +9,19 @@ import { sleep } from "@/utils/sleep";
 const logger = mainLogger.child({ context: "Blockchain" });
 
 export async function listenToBlockchain() {
-  const slasher = new Slasher({
-    client: rpcClient,
-    address: config.SLASHER_ADDRESS,
-    registryContractAddress: config.REGISTRY_ADDRESS,
-    signal: abortController.signal,
-  });
-
   let currentBlock: bigint | undefined;
   let isRevealWindowNotified = false;
 
   while (!abortController.signal.aborted) {
     try {
-      currentBlock = await rpcClient.getBlockNumber();
-
-      const currentEpochEndBlock = await slasher.getCurrentEpochEndBlock();
-      const revealWindowEnd =
-        currentEpochEndBlock + (await slasher.getRevealWindow());
+      const networkState = await indexerClient.getNetworkState();
+      const currentEpochEndBlock = BigInt(
+        networkState.current.epochEndBlock.value
+      );
+      const revealWindowEnd = BigInt(
+        networkState.current.revealWindowEndBlock.value
+      );
+      currentBlock = BigInt(networkState.current.block);
 
       // When current Epoch is over
       if (currentBlock > revealWindowEnd && config.CLOSE_EPOCH) {
