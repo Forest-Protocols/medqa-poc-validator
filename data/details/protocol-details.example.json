@@ -1,0 +1,55 @@
+{
+  "name": "Example Protocol",
+  "tests": [],
+  "offerParams": [
+    {
+      "name": "CPU",
+      "unit": "Cores",
+      "isFilterable": true,
+      "priority": 100,
+      "isPrimary": true
+    },
+    {
+      "name": "RAM",
+      "unit": "GB",
+      "isFilterable": true,
+      "priority": 90,
+      "isPrimary": true
+    },
+    {
+      "name": "Disk Type",
+      "unit": ["SSD", "HDD", "M2"],
+      "isFilterable": true,
+      "priority": 80,
+      "isPrimary": true
+    },
+    {
+      "name": "Disk Size",
+      "unit": "GB",
+      "isFilterable": true,
+      "priority": 70,
+      "isPrimary": false
+    },
+    {
+      "name": "Virtualization",
+      "unit": ["VM", "Container"],
+      "isFilterable": true,
+      "priority": 60,
+      "isPrimary": false
+    },
+    {
+      "name": "CPU Architecture",
+      "unit": ["x86", "ARM"],
+      "isFilterable": true,
+      "priority": 50,
+      "isPrimary": false
+    },
+    {
+      "name": "Isolation",
+      "unit": ["Shared", "Dedicated"],
+      "isFilterable": true,
+      "priority": 40,
+      "isPrimary": false
+    }
+  ]
+}

@@ -24,6 +24,7 @@ import {
   tryParseJSON,
   ProtocolDetails,
   ProviderDetails,
+  IndexerAgreement,
 } from "@forest-protocols/sdk";
 import {
   Account,
@@ -40,7 +41,7 @@ import {
 } from "viem";
 import { config } from "./config";
 import { privateKeyToAccount } from "viem/accounts";
-import { rpcClient } from "./client";
+import { indexerClient, rpcClient } from "./client";
 import { logger as mainLogger } from "./logger";
 import { Logger } from "winston";
 import { colorHex, colorKeyword, colorNumber } from "./color";
@@ -161,17 +162,37 @@ export class Validator {
 
     if (config.CLOSE_AGREEMENTS_AT_STARTUP) {
       validator.logger.info("Closing previous Agreements");
-      const agreements = await validator.protocol.getAllUserAgreements(
-        validator.actorInfo.ownerAddr
-      );
-      const activeAgreements = agreements.filter(
-        (agreement) => agreement.status === Status.Active
-      );
 
-      if (activeAgreements.length == 0) {
+      // Get all active Agreements of this Validator
+      const allAgreements: IndexerAgreement[] = [];
+      let page = 1;
+
+      while (true) {
+        const res = await indexerClient.getAgreements({
+          protocolAddress: config.PROTOCOL_ADDRESS,
+          status: Status.Active,
+          userAddress: validator.actorInfo.ownerAddr,
+          page,
+          limit: 100,
+        });
+
+        allAgreements.push(...res.data);
+
+        if (res.pagination.totalPages <= page) {
+          break;
+        }
+
+        page++;
+        validator.logger.debug(
+          `Fetched page ${page} of active Agreements currently ${allAgreements.length} active Agreements found`
+        );
+      }
+
+      if (allAgreements.length == 0) {
         validator.logger.info("No active Agreements found");
       }
-      for (const agreement of activeAgreements) {
+
+      for (const agreement of allAgreements) {
         await validator.closeAgreement(agreement.id);
       }
     }
@@ -300,57 +321,62 @@ export class Validator {
     this.isUploadCheckerRunning = true;
     this.logger.info(`Checking uploads...`);
 
-    // Check if all of the validations have corresponding upload records on the database.
-    await this.checkExistingValidationsToBeUploaded();
+    try {
+      // Check if all of the validations have corresponding upload records on the database.
+      await this.checkExistingValidationsToBeUploaded();
 
-    const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
-    if (toBeUploaded.length == 0) {
-      this.logger.info(`No data found to upload`);
+      const toBeUploaded = await DB.getUploads(this.actorInfo.id, false);
+      if (toBeUploaded.length == 0) {
+        this.logger.info(`No data found to upload`);
+        this.isUploadCheckerRunning = false;
+        return;
+      }
+
+      // Upload the data via uploaders that defined for this Validator
+      for (const upload of toBeUploaded) {
+        // No need to continue if the abort signal is received
+        this.checkAbort();
+
+        const uploader = this.uploaders.find(
+          (u) => u.constructor.name === upload.uploadedBy
+        );
+        if (!uploader) {
+          this.logger.warning(
+            `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
+          );
+          continue;
+        }
+
+        try {
+          await uploader.upload([
+            {
+              commitHash: upload.commitHash,
+              content: upload.content,
+            },
+          ]);
+          await DB.markAsUploaded(
+            upload.cid,
+            upload.commitHash,
+            this.actorInfo.id
+          );
+          this.logger.info(
+            `Data of ${colorHex(upload.commitHash)} uploaded with ${
+              uploader.constructor.name
+            }`
+          );
+        } catch (err: unknown) {
+          const error = ensureError(err);
+          this.logger.error(
+            `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
+          );
+        }
+      }
+    } catch (err: unknown) {
+      const error = ensureError(err);
+      this.logger.error(`Error while checking uploads: ${error.stack}`);
+    } finally {
       this.isUploadCheckerRunning = false;
-      return;
     }
-
-    // Upload the data via uploaders that defined for this Validator
-    for (const upload of toBeUploaded) {
-      // No need to continue if the abort signal is received
-      this.checkAbort();
-
-      const uploader = this.uploaders.find(
-        (u) => u.constructor.name === upload.uploadedBy
-      );
-      if (!uploader) {
-        this.logger.warning(
-          `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
-        );
-        continue;
-      }
-
-      try {
-        await uploader.upload([
-          {
-            commitHash: upload.commitHash,
-            content: upload.content,
-          },
-        ]);
-        await DB.markAsUploaded(
-          upload.cid,
-          upload.commitHash,
-          this.actorInfo.id
-        );
-        this.logger.info(
-          `Data of ${colorHex(upload.commitHash)} uploaded with ${
-            uploader.constructor.name
-          }`
-        );
-      } catch (err: unknown) {
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
-        );
-      }
-    }
-
-    this.isUploadCheckerRunning = false;
   }
 
   /**
@@ -529,27 +555,6 @@ export class Validator {
               )}`
             );
 
-            // Reveal the results to the blockchain
-            await this.slasher.revealResult(
-              commitHash as Hex,
-              this.actorInfo.ownerAddr,
-              config.PROTOCOL_ADDRESS,
-              validations.map((validation) => ({
-                agreementId: validation.agreementId,
-                provId: validation.providerId,
-                score: BigInt(validation.score),
-              }))
-            );
-
-            this.logger.info(
-              `${
-                validations.length
-              } validations are revealed (commit hash: ${colorHex(commitHash)})`
-            );
-
-            // Mark validations as revealed in the database
-            await DB.markAsRevealed(commitHash as Hex);
-
             // Generate audit file data
             const { auditFile, stringifiedData, detailsLink } =
               await this.buildAuditFileObject(commitHash as Hex, validations);
@@ -611,6 +616,27 @@ export class Validator {
                 );
               }
             }
+
+            // Reveal the results to the blockchain
+            await this.slasher.revealResult(
+              commitHash as Hex,
+              this.actorInfo.ownerAddr,
+              config.PROTOCOL_ADDRESS,
+              validations.map((validation) => ({
+                agreementId: validation.agreementId,
+                provId: validation.providerId,
+                score: BigInt(validation.score),
+              }))
+            );
+
+            this.logger.info(
+              `${
+                validations.length
+              } validations are revealed (commit hash: ${colorHex(commitHash)})`
+            );
+
+            // Mark validations as revealed in the database
+            await DB.markAsRevealed(commitHash as Hex);
           } catch (err: unknown) {
             if (isTermination(err)) {
               return;

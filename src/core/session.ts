@@ -140,6 +140,20 @@ export class ValidationSession {
   }
 
   /**
+   * Returns whether the session is completed properly
+   * e.g Agreement is entered, Validation is executed and finished.
+   */
+  get isCompleted() {
+    try {
+      // `this.info` throws an error if the session is not completed
+      // and `finishedAt` indicates that the session is completed.
+      return this.info.finishedAt !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Enters a new Agreement with the Offer
    */
   private async enterAgreement() {
