@@ -5,12 +5,14 @@ import { logError, logger as mainLogger } from "@/core/logger";
 import { ensureError } from "@/utils/ensure-error";
 import { abortController } from "./signal";
 import { sleep } from "@/utils/sleep";
+import { isAxiosError } from "axios";
 
 const logger = mainLogger.child({ context: "Blockchain" });
 
 export async function listenToBlockchain() {
   let currentBlock: bigint | undefined;
   let isRevealWindowNotified = false;
+  let isIndexerHealthLogged = false;
 
   while (!abortController.signal.aborted) {
     try {
@@ -22,6 +24,7 @@ export async function listenToBlockchain() {
         networkState.current.revealWindowEndBlock.value
       );
       currentBlock = BigInt(networkState.current.block);
+      isIndexerHealthLogged = false;
 
       // When current Epoch is over
       if (currentBlock > revealWindowEnd && config.CLOSE_EPOCH) {
@@ -111,8 +114,19 @@ export async function listenToBlockchain() {
 
       // Wait a little bit between iterations
       await sleep(2000);
-    } catch (err: unknown) {
-      logError({ err, logger });
+    } catch (err) {
+      // If the error is an AxiosError, indexer might be down
+      if (isAxiosError(err)) {
+        const isHealthy = await indexerClient.isHealthy();
+
+        // Log this error message only once
+        if (!isHealthy && !isIndexerHealthLogged) {
+          isIndexerHealthLogged = true;
+          logger.error("Indexer is not healthy, cannot fetch data from it");
+        }
+      } else {
+        logError({ err, logger });
+      }
     }
   }
 
