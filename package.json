@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@dotenvx/dotenvx": "^1.38.3",
-    "@forest-protocols/sdk": "^2.10.0",
+    "@forest-protocols/sdk": "^2.11.1",
     "@supabase/supabase-js": "^2.50.0",
     "ansis": "^3.17.0",
     "async-mutex": "^0.5.0",
