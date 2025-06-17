@@ -29,6 +29,13 @@
       "when": 1748962799517,
       "tag": "0003_far_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1750153140343,
+      "tag": "0004_shallow_thanos",
+      "breakpoints": true
     }
   ]
 }

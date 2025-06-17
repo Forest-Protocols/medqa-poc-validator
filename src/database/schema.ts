@@ -15,7 +15,10 @@ import { Hex } from "viem";
 export const testResultsTable = pgTable("test_results", {
   id: integer().primaryKey().generatedByDefaultAsIdentity(),
   sessionId: varchar("session_id", { length: 15 })
-    .references(() => validationsTable.sessionId)
+    .references(() => validationsTable.sessionId, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    })
     .notNull(),
   isSucceed: boolean("is_succeed").notNull().default(true),
   raw: text().notNull().default(""),
@@ -32,7 +35,10 @@ relations(testResultsTable, ({ one }) => ({
 export const validationsTable = pgTable("validations", {
   sessionId: varchar("session_id", { length: 15 }).primaryKey(),
   validatorId: integer("validator_id")
-    .references(() => validatorsTable.id)
+    .references(() => validatorsTable.id, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    })
     .notNull(),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   finishedAt: timestamp("finished_at").notNull().defaultNow(),
@@ -56,7 +62,10 @@ export const uploadsTable = pgTable("uploads", {
   cid: varchar({ length: 100 }).primaryKey(),
   content: text().notNull(),
   validatorId: integer("validator_id")
-    .references(() => validatorsTable.id)
+    .references(() => validatorsTable.id, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    })
     .notNull(),
   commitHash: varchar("commit_hash", { length: 70 }).$type<Hex>().notNull(),
   uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
