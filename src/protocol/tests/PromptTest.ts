@@ -30,6 +30,11 @@ export class PromptTest extends PerformanceTest<PromptTestResult, Validation> {
         pt: config.PROTOCOL_ADDRESS,
         messages: [
           {
+            role: "system",
+            content:
+              "You are an knowledge expert, you are supposed to answer the multi-choice question to derive your final answer as `The answer is ...` without any other additional text or explanation.",
+          },
+          {
             role: "user",
             content: prompt.fullPrompt,
           },
