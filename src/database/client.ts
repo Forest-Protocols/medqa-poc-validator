@@ -349,7 +349,7 @@ class DatabaseClient {
       COALESCE(
         jsonb_agg(
           jsonb_build_object(
-            'isSuccess', ${schema.testResultsTable.isSucceed},
+            'isSuccess', ${schema.testResultsTable.isSuccess},
             'raw', ${schema.testResultsTable.raw},
             'result', ${schema.testResultsTable.result},
             'testName', ${schema.testResultsTable.testName}

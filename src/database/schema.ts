@@ -20,7 +20,7 @@ export const testResultsTable = pgTable("test_results", {
       onUpdate: "cascade",
     })
     .notNull(),
-  isSucceed: boolean("is_succeed").notNull().default(true),
+  isSuccess: boolean("is_success").notNull().default(true),
   raw: text().notNull().default(""),
   result: json().notNull().$type<StructuredTestResults>().default({}),
   testName: varchar("test_name", { length: 100 }).notNull().default("N/A"),

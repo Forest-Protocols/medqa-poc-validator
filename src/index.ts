@@ -94,7 +94,7 @@ async function main() {
   await DB.disconnect();
 
   logger.warning("See ya...");
-  process.exit();
+  process.exit(process.exitCode || 0);
 }
 
 // To make BigInt values visible within JSON.stringify output.
