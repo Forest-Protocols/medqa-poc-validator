@@ -1,11 +1,11 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/**/*.ts"],
+  entry: ["src/index.ts"],
   target: "node20",
   format: ["esm"],
   clean: true,
-  bundle: false,
+  bundle: true,
   skipNodeModulesBundle: true,
   outDir: "dist",
   splitting: false,

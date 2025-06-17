@@ -1,0 +1,1 @@
+ALTER TABLE "test_results" RENAME COLUMN "is_succeed" TO "is_success";

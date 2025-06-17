@@ -559,9 +559,28 @@ export class Validator {
             const { auditFile, stringifiedData, detailsLink } =
               await this.buildAuditFileObject(commitHash as Hex, validations);
 
+            // Log data for debugging
+            this.logger.debug(
+              `JSON.stringify validations and stringifiedData data for commit hash ${colorHex(
+                auditFile.commitHash
+              )}\nvalidations: ${JSON.stringify(
+                validations,
+                null,
+                2
+              )}\n\nstringifiedData: ${stringifiedData}`
+            );
+
             // Call uploaders with the results
             for (const uploader of this.uploaders) {
               try {
+                this.logger.info(
+                  `Audit file of ${colorHex(auditFile.commitHash)} (including ${
+                    auditFile.data.length
+                  } sessions, detailsLink: ${colorKeyword(
+                    detailsLink
+                  )}) uploading with ${uploader.constructor.name}`
+                );
+
                 // Save the data to be uploaded
                 const uploadData = await DB.addUploadRecord(
                   stringifiedData,
@@ -593,17 +612,6 @@ export class Validator {
                   } sessions, detailsLink: ${colorKeyword(
                     detailsLink
                   )}) uploaded with ${uploader.constructor.name}`
-                );
-
-                // Log data for debugging
-                this.logger.debug(
-                  `JSON.stringify validations and stringifiedData data for commit hash ${colorHex(
-                    auditFile.commitHash
-                  )}\nvalidations: ${JSON.stringify(
-                    validations,
-                    null,
-                    2
-                  )}\n\nstringifiedData: ${stringifiedData}`
                 );
               } catch (err: unknown) {
                 const error = ensureError(err);
@@ -645,6 +653,8 @@ export class Validator {
             const error = ensureError(err);
 
             /**
+             * TODO: This may not work as expected since smart contract may also throw "InvalidState" error rather than index out of bounds.
+             *
              * If the error was thrown because we were too late to reveal
              * the commit hash, then mark the commit hash as vanished so
              * we won't try to reveal it again.
@@ -933,6 +943,7 @@ export class Validator {
     const providerId =
       typeof providerOrId === "number" ? providerOrId : providerOrId.id;
 
+    // TODO: Use a better cache workflow. What would happen if the Provider details are updated?
     if (this.providerNames[providerId] === undefined) {
       this.logger.info(`Getting details of the Provider ${providerId}`);
 
