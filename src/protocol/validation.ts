@@ -72,7 +72,7 @@ export class Validation extends BaseValidation {
   async fetchPromptSet(token: string) {
     this.logger.info(`Fetching MedQA prompt set from the server.`);
     const response = await axios.get(
-      `${config.PEERBENCH_API_URL}/prompt-sets/24`, // MedQA prompt set id
+      `${config.PEERBENCH_API_URL}/prompt-sets/1`, // MedQA prompt set id
       {
         headers: {
           Authorization: `Bearer ${token}`,
