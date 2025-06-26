@@ -573,6 +573,24 @@ export class Validator {
             // Call uploaders with the results
             for (const uploader of this.uploaders) {
               try {
+                const uploadRecord = await DB.getUpload(
+                  detailsLink,
+                  uploader.constructor.name
+                );
+
+                if (uploadRecord) {
+                  this.logger.info(
+                    `Record is already uploaded to the remote service`,
+                    {
+                      cid: uploadRecord.cid,
+                      commitHash: uploadRecord.commitHash,
+                      uploadedBy: uploadRecord.uploadedBy,
+                      uploadedAt: uploadRecord.uploadedAt,
+                    }
+                  );
+                  continue;
+                }
+
                 this.logger.info(
                   `Audit file of ${colorHex(auditFile.commitHash)} (including ${
                     auditFile.data.length
