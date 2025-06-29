@@ -3,12 +3,9 @@ import { logError, logger as mainLogger } from "@/core/logger";
 import { rpcClient } from "@/core/client";
 import { config } from "@/core/config";
 import { abortController } from "@/core/signal";
-import { yellow } from "ansis";
 import { ValidationSession } from "@/core/session";
 import { DB } from "@/database/client";
 import { ValidationSessionInfo } from "@/core/types";
-import { ensureError } from "@/utils/ensure-error";
-import { isTermination } from "@/utils/is-termination";
 
 /**
  * Base class for Validation executors.
@@ -57,12 +54,14 @@ export abstract class BaseValidationExecutor {
           info.testResults
         );
       } catch (err) {
-        if (!isTermination(err)) {
-          const error = ensureError(err);
-          this.logger.warning(
-            `Session ${info.sessionId} results couldn't save to the database: ${error.stack}`
-          );
-        }
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Session results couldn't save to the database`,
+          meta: {
+            sessionId: info.sessionId,
+          },
+        });
       }
     }
   }
@@ -80,12 +79,14 @@ export abstract class BaseValidationExecutor {
         );
         await this.saveTestResults(session.info, score);
       } catch (err) {
-        if (!isTermination(err)) {
-          const error = ensureError(err);
-          this.logger.warning(
-            `Session ${session.id} results couldn't save to the database: ${error.stack}`
-          );
-        }
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Session results couldn't save to the database`,
+          meta: {
+            sessionId: session.id,
+          },
+        });
       }
     }
   }
@@ -109,7 +110,12 @@ export abstract class BaseValidationExecutor {
         logError({
           err,
           logger: this.logger,
-          prefix: `Error while committing results by Validator ${validatorTag}:`,
+          prefix: `Error while committing results by Validator`,
+          meta: {
+            validatorTag,
+            validatorOwnerAddress:
+              config.validators[validatorTag].actorInfo.ownerAddr.toLowerCase(),
+          },
         })
       );
     }
@@ -119,17 +125,17 @@ export abstract class BaseValidationExecutor {
    * Starts the executor
    */
   async start() {
-    this.logger.info(
-      `Executor ${yellow.bold(this.constructor.name)} is started`
-    );
+    this.logger.info(`Executor started`);
     try {
       await this.exec();
     } catch (err) {
-      logError({ err, logger: this.logger });
+      logError({
+        err,
+        logger: this.logger,
+        prefix: `Executor failed`,
+      });
     } finally {
-      this.logger.warning(
-        `Executor ${yellow.bold(this.constructor.name)} is finished`
-      );
+      this.logger.warning(`Executor finished`);
     }
   }
 

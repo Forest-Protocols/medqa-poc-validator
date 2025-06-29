@@ -14,6 +14,14 @@ const colors = {
   debug: "cyan",
 };
 
+const decolorize = (str: string): string => {
+  return str.replace(
+    // eslint-disable-next-line no-control-regex
+    /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g,
+    ""
+  );
+};
+
 export const logger = createLogger({
   level: config.LOG_LEVEL,
   levels: {
@@ -24,30 +32,44 @@ export const logger = createLogger({
   },
   transports: [
     new transports.Console({
-      format: format.combine(
-        format.prettyPrint(),
-        format.splat(),
-        format.timestamp({
-          format: "YYYY/MM/DD - HH:mm:ss",
-        }),
-        format.printf((info) => {
-          const color = colors[info.level as LogLevel];
-          const levelColor = ansis[color as ColorName];
-          const context = (info.context as string) || "";
-          const formatted = [
-            `${info.timestamp}`,
-            levelColor.bold(info.level.toUpperCase()),
-            levelColor.bold(`[${context || "Main"}]`).padEnd(25),
-            config.NODE_ENV == "dev" && info.stack
-              ? levelColor(
-                  `${info.message}${(info.stack as string[]).join("\n")}`
-                )
-              : levelColor(info.message),
-          ];
+      format:
+        config.LOG_TYPE === "json"
+          ? format.combine(
+              winston.format.timestamp(),
+              winston.format.json({
+                replacer(key, value) {
+                  if (key === "message") {
+                    // decolorize the message
+                    return decolorize(value as string);
+                  }
+                  return value;
+                },
+              })
+            )
+          : format.combine(
+              format.prettyPrint(),
+              format.splat(),
+              format.timestamp({
+                format: "YYYY/MM/DD - HH:mm:ss",
+              }),
+              format.printf((info) => {
+                const color = colors[info.level as LogLevel];
+                const levelColor = ansis[color as ColorName];
+                const context = (info.context as string) || "";
+                const formatted = [
+                  `${info.timestamp}`,
+                  levelColor.bold(info.level.toUpperCase()),
+                  levelColor.bold(`[${context || "Main"}]`).padEnd(25),
+                  config.NODE_ENV == "dev" && info.stack
+                    ? levelColor(
+                        `${info.message}${(info.stack as string[]).join("\n")}`
+                      )
+                    : levelColor(info.message),
+                ];
 
-          return formatted.filter((f) => f).join(" ");
-        })
-      ),
+                return formatted.filter((f) => f).join(" ");
+              })
+            ),
     }),
   ],
 });
@@ -60,9 +82,13 @@ export function logError(params: {
   err: unknown;
   logger: winston.Logger;
   prefix?: string;
+  meta?: Record<string, any>;
 }) {
   if (isTermination(params.err)) return;
 
   const error = ensureError(params.err);
-  params.logger.error(`${params.prefix || "Error: "}${error.stack}`);
+  params.logger.error(`${params.prefix || "Something went wrong"}`, {
+    stacktrace: error.stack,
+    ...(params.meta || {}),
+  });
 }

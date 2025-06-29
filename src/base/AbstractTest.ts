@@ -2,6 +2,7 @@ import { TestResult, StructuredTestResults } from "@/core/types";
 import { logger as mainLogger } from "@/core/logger";
 import { Logger } from "winston";
 import { BaseValidation } from "./BaseValidation";
+import { config } from "@/core/config";
 
 /**
  * Abstract class that all of the Tests have to inherit from.
@@ -16,7 +17,11 @@ export abstract class AbstractTest<
 
   constructor(validatorTag: string, sessionId: string) {
     this.logger = mainLogger.child({
-      context: `${this.constructor.name}(${sessionId})`,
+      context: `${this.constructor.name}`,
+      validatorTag,
+      validatorOwnerAddress:
+        config.validators[validatorTag].actorInfo.ownerAddr.toLowerCase(),
+      sessionId,
     });
 
     this.validatorTag = validatorTag;

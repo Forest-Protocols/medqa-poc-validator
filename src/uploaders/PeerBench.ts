@@ -1,6 +1,7 @@
 import { AbstractUploader, UploadAuditFile } from "@/base/AbstractUploader";
 import { config } from "@/core/config";
 import { Validator } from "@/core/validator";
+import { logError } from "@/core/logger";
 import { sleep } from "@/utils/sleep";
 import { calculateSHA256 } from "@forest-protocols/sdk";
 import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
@@ -93,10 +94,12 @@ export class PeerBenchUploader extends AbstractUploader {
         this.token = this.session?.access_token;
         break;
       } catch (err) {
-        this.logger.debug(
-          `Failed to refresh Supabase token: ${JSON.stringify(err, null, 2)}`
-        );
-        this.logger.debug(`Retrying in 10 seconds`);
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Failed to refresh Supabase token`,
+        });
+        this.logger.info(`Retrying in 10 seconds`);
         await sleep(10_000);
       }
     }
@@ -158,7 +161,9 @@ export class PeerBenchUploader extends AbstractUploader {
     });
 
     if (error) {
-      this.logger.debug(`Failed login to PeerBench: ${error.message}`);
+      this.logger.error(`Failed login to PeerBench`, {
+        stacktrace: error,
+      });
       return;
     }
 
@@ -177,7 +182,9 @@ export class PeerBenchUploader extends AbstractUploader {
     });
 
     if (error) {
-      this.logger.debug(`Failed sign up to PeerBench: ${error.message}`);
+      this.logger.error(`Failed sign up to PeerBench`, {
+        stacktrace: error,
+      });
       return;
     }
 

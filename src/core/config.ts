@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { blue, red } from "ansis";
+import { red } from "ansis";
 import {
   addressSchema,
   ForestRegistryAddress,
@@ -15,7 +15,6 @@ import { Address } from "viem";
 import { Validator } from "./validator";
 import { ValidatorConfiguration } from "./types";
 import dotenv from "@dotenvx/dotenvx";
-import { readableTime } from "@/utils/readable-time";
 import { parseTime } from "@/utils/parse-time";
 
 dotenv.config({ ignore: ["MISSING_ENV_FILE"] });
@@ -81,10 +80,9 @@ function parseValidatorConfigurations() {
 }
 
 function parseEnvVariables() {
-  console.log(blue.bold("[INFO] Parsing environment variables"));
-
   const environmentSchema = z
     .object({
+      LOG_TYPE: z.enum(["json", "pretty"]).default("json"),
       NODE_ENV: z.enum(["dev", "production"]).default("dev"),
       LOG_LEVEL: z.enum(["error", "warning", "info", "debug"]).default("debug"),
       DATABASE_URL: nonEmptyStringSchema,
@@ -113,10 +111,6 @@ function parseEnvVariables() {
       LISTEN_BLOCKCHAIN: z.string().transform((value) => {
         const result = value === "true";
 
-        if (result) {
-          console.log(blue.bold("[INFO] Blockchain listener is enabled"));
-        }
-
         return result;
       }),
       VALIDATE_INTERVAL: z
@@ -135,14 +129,6 @@ function parseEnvVariables() {
               return z.NEVER;
             }
 
-            console.log(
-              blue.bold(
-                `[INFO] Validation interval is enabled for between: ${readableTime(
-                  rangeStart
-                )}-${readableTime(rangeEnd)}`
-              )
-            );
-
             return {
               start: rangeStart,
               end: rangeEnd,
@@ -156,13 +142,6 @@ function parseEnvVariables() {
               return z.NEVER;
             }
 
-            console.log(
-              blue.bold(
-                `[INFO] Validation interval is enabled for: ${readableTime(
-                  result
-                )}`
-              )
-            );
             return result;
           }
 

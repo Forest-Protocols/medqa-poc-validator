@@ -57,11 +57,13 @@ export class IntervalValidationExecutor extends BaseValidationExecutor {
         );
         const interval = this.getInterval();
 
-        this.logger.info(
-          `Next validation will start in ${readableTime(interval)}`
-        );
+        this.logger.info(`Next validation will start`, {
+          timeLeft: readableTime(interval),
+        });
 
-        this.logger.debug(`Active Validation sessions ${this.activeSessions}`);
+        this.logger.info(`Active Validation sessions`, {
+          count: this.activeSessions,
+        });
 
         // Wait until the next iteration start
         await sleep(interval);

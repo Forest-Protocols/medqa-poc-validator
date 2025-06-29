@@ -4,7 +4,6 @@ import { Validator } from "./validator";
 import { config } from "./config";
 import winston from "winston";
 import { logError, logger as mainLogger } from "./logger";
-import { colorNumber } from "./color";
 import { Validation } from "@/protocol/validation";
 import { sleep } from "@/utils/sleep";
 import { Offer, TerminationError } from "@forest-protocols/sdk";
@@ -57,7 +56,11 @@ export class ValidationSession {
     this.parameters = params.parameters;
     this.offer = params.offer;
     this.logger = mainLogger.child({
-      context: `Validator(${this.validator.tag}/${this.id})`,
+      context: `Session`,
+      id: this.id,
+      offerId: this.offer.id,
+      validatorTag: this.validator.tag,
+      validatorOwnerAddress: this.validator.actorInfo.ownerAddr.toLowerCase(),
     });
   }
 
@@ -65,11 +68,7 @@ export class ValidationSession {
    * Starts the session and saves the test results into `testResults` array.
    */
   async start() {
-    this.logger.info(
-      `Starting a new Validation session for Offer ${colorNumber(
-        this.offer.id
-      )} ->`
-    );
+    this.logger.info(`Starting a new Validation session`);
 
     try {
       await this.enterAgreement();
@@ -86,7 +85,10 @@ export class ValidationSession {
       logError({
         err,
         logger: this.logger,
-        prefix: `Error in execution of the Validation process:`,
+        prefix: `Error in execution of the Validation process`,
+        meta: {
+          agreementId: this.agreementId,
+        },
       });
     } finally {
       // If the Agreement is entered, close it
@@ -97,17 +99,18 @@ export class ValidationSession {
             logError({
               err,
               logger: this.logger,
-              prefix: `Error while closing Agreement ${colorNumber(
-                this.agreementId!
-              )}:`,
+              prefix: `Error while closing Agreement`,
+              meta: {
+                agreementId: this.agreementId,
+              },
             })
           );
       }
 
       this.finishedAt = new Date();
-      this.logger.info(
-        `<- Validation session for Offer ${colorNumber(this.offer.id)} is over`
-      );
+      this.logger.info(`Validation session is over`, {
+        agreementId: this.agreementId,
+      });
     }
   }
 

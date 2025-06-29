@@ -42,9 +42,8 @@ import {
 import { config } from "./config";
 import { privateKeyToAccount } from "viem/accounts";
 import { indexerClient, rpcClient } from "./client";
-import { logger as mainLogger } from "./logger";
+import { logError, logger as mainLogger } from "./logger";
 import { Logger } from "winston";
-import { colorHex, colorKeyword, colorNumber } from "./color";
 import {
   AggregatedValidation,
   Resource,
@@ -93,9 +92,6 @@ export class Validator {
   static async create(tag: string, valConfig: ValidatorConfiguration) {
     const validator = new Validator();
 
-    validator.logger = mainLogger.child({
-      context: `Validator(${tag})`,
-    });
     validator.tag = tag;
     validator.account = privateKeyToAccount(
       valConfig.validatorWalletPrivateKey
@@ -134,6 +130,12 @@ export class Validator {
     });
 
     await validator.initActorInfo();
+    validator.logger = mainLogger.child({
+      context: `Validator`,
+      validatorTag: tag,
+      validatorOwnerAddress: validator.actorInfo.ownerAddr.toLowerCase(),
+    });
+
     await validator.initPipe(valConfig.operatorWalletPrivateKey);
 
     // Get the Protocol name from the details file
@@ -183,14 +185,16 @@ export class Validator {
         }
 
         page++;
-        validator.logger.debug(
-          `Fetched page ${page} of active Agreements currently ${allAgreements.length} active Agreements found`
-        );
       }
 
       if (allAgreements.length == 0) {
         validator.logger.info("No active Agreements found");
       }
+
+      validator.logger.info(`Opened Agreements found`, {
+        totalPage: page,
+        totalAgreements: allAgreements.length,
+      });
 
       for (const agreement of allAgreements) {
         await validator.closeAgreement(agreement.id);
@@ -209,20 +213,26 @@ export class Validator {
 
       if (!Uploader) {
         validator.logger.warning(
-          `Uploader ${enabledUploader} is not available, skipping...`
+          `Uploader is not available. Please check ENABLED_UPLOADERS and available uploaders. Skipping...`,
+          {
+            uploader: enabledUploader,
+            availableUploaders: availableUploaders.map((u) => u.name),
+          }
         );
         continue;
       }
 
       // Check if the uploader is already initialized
       if (validator.uploaders.some((u) => u instanceof Uploader)) {
-        validator.logger.info(
-          `Uploader ${enabledUploader} is already initialized, skipping...`
-        );
+        validator.logger.info(`Uploader is already initialized, skipping...`, {
+          uploader: enabledUploader,
+        });
         continue;
       }
 
-      validator.logger.info(`Initializing uploader: ${enabledUploader}`);
+      validator.logger.info(`Initializing uploader`, {
+        uploader: enabledUploader,
+      });
 
       const uploader = new Uploader(validator);
       await uploader.init();
@@ -266,7 +276,7 @@ export class Validator {
     );
 
     if (unuploadedRevealedValidations.length == 0) {
-      this.logger.debug(`No unuploaded revealed validations found`);
+      this.logger.info(`No unuploaded revealed validations found`);
       return;
     }
 
@@ -297,17 +307,20 @@ export class Validator {
             detailsLink
           );
 
-          this.logger.info(
-            `Added upload record for commit ${colorHex(commitHash)} via  ${
-              uploader.constructor.name
-            }. It'll be processed by the upload checker.`
-          );
+          this.logger.info(`Commit added to the upload queue`, {
+            commitHash,
+            uploader: uploader.constructor.name,
+          });
         }
       } catch (err: unknown) {
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while adding upload records for revealed validations: ${error.stack}`
-        );
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while adding commit to the upload queue`,
+          meta: {
+            commitHash,
+          },
+        });
       }
     }
   }
@@ -342,7 +355,13 @@ export class Validator {
         );
         if (!uploader) {
           this.logger.warning(
-            `Uploader ${upload.uploadedBy} not found inside Validator(${this.tag}), skipping...`
+            `Uploader not found in enabled uploaders of the Validator, skipping...`,
+            {
+              uploader: upload.uploadedBy,
+              initializedUploaders: this.uploaders.map(
+                (u) => u.constructor.name
+              ),
+            }
           );
           continue;
         }
@@ -359,21 +378,28 @@ export class Validator {
             upload.commitHash,
             this.actorInfo.id
           );
-          this.logger.info(
-            `Data of ${colorHex(upload.commitHash)} uploaded with ${
-              uploader.constructor.name
-            }`
-          );
+          this.logger.info(`Data uploaded`, {
+            commitHash: upload.commitHash,
+            uploader: uploader.constructor.name,
+          });
         } catch (err: unknown) {
-          const error = ensureError(err);
-          this.logger.error(
-            `Error while uploading data to ${uploader.constructor.name}: ${error.stack}`
-          );
+          logError({
+            err,
+            logger: this.logger,
+            prefix: `Error while uploading data`,
+            meta: {
+              uploader: uploader.constructor.name,
+              commitHash: upload.commitHash,
+            },
+          });
         }
       }
     } catch (err: unknown) {
-      const error = ensureError(err);
-      this.logger.error(`Error while checking uploads: ${error.stack}`);
+      logError({
+        err,
+        logger: this.logger,
+        prefix: `Error while checking uploads`,
+      });
     } finally {
       this.isUploadCheckerRunning = false;
     }
@@ -417,30 +443,24 @@ export class Validator {
               return;
             }
 
+            // Chunk has bunch of fields which are unnecessary
+            // for the commit operation
+            const mappedChunk = chunk.map((validation) => ({
+              agreementId: validation.agreementId,
+              provId: validation.providerId,
+              score: BigInt(validation.score),
+            }));
+
             try {
               // Sort the chunk to have consistent commitHash
               this.sortValidations(chunk);
 
-              this.logger.debug(
-                `Commit Results Chunk: ${JSON.stringify(
-                  chunk.map((validation) => ({
-                    agreementId: validation.agreementId,
-                    provId: validation.providerId,
-                    score: BigInt(validation.score),
-                  })),
-                  null,
-                  2
-                )}`
-              );
+              this.logger.debug(`Commit chunk`, {
+                chunk: mappedChunk,
+              });
 
               // Compute the hash of the chunk
-              const hash = await this.slasher.computeHash(
-                chunk.map((validation) => ({
-                  agreementId: validation.agreementId,
-                  provId: validation.providerId,
-                  score: BigInt(validation.score),
-                }))
-              );
+              const hash = await this.slasher.computeHash(mappedChunk);
 
               // Get details link of the audit file data
               const { detailsLink, stringifiedData } =
@@ -461,34 +481,30 @@ export class Validator {
                 hash
               );
 
-              this.logger.info(
-                `${
-                  chunk.length
-                } validations are committed to the blockchain (commit hash: ${colorHex(
-                  hash
-                )}, detailsLink: ${colorKeyword(detailsLink)})`
-              );
-
-              // Log data for debugging
-              this.logger.debug(
-                `JSON.stringify chunk and stringifiedData data for commit hash ${colorHex(
-                  hash
-                )}:\nchunk: ${JSON.stringify(
-                  chunk,
-                  null,
-                  2
-                )}\n\nstringifiedData: ${stringifiedData}`
-              );
+              this.logger.info(`Validations are committed to the blockchain`, {
+                commitHash: hash,
+                detailsLink,
+                validations: chunk.length,
+              });
+              this.logger.debug("Commit details", {
+                commitHash: hash,
+                chunk: mappedChunk,
+                auditFileContent: stringifiedData,
+              });
             } catch (err: unknown) {
               if (isTermination(err)) {
                 // Re-throw for outer catch block
                 throw err;
               }
 
-              const error = ensureError(err);
-              this.logger.error(
-                `Error while committing scores to the blockchain: ${error.stack}`
-              );
+              logError({
+                err,
+                logger: this.logger,
+                prefix: `Error while committing scores to the blockchain`,
+                meta: {
+                  chunk: mappedChunk,
+                },
+              });
             }
           }
         );
@@ -497,10 +513,11 @@ export class Validator {
           return;
         }
 
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while committing scores to the blockchain: ${error.stack}`
-        );
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while committing scores to the blockchain`,
+        });
       }
     });
   }
@@ -521,9 +538,9 @@ export class Validator {
           return;
         }
 
-        this.logger.info(
-          `Revealing ${unrevealedValidations.length} results...`
-        );
+        this.logger.info(`Revealing results`, {
+          count: unrevealedValidations.length,
+        });
 
         // Group validations based on their hashes because we need to reveal
         // the validations that has the same hash at once.
@@ -543,32 +560,26 @@ export class Validator {
             // the hash will be different.
             this.sortValidations(validations);
 
-            this.logger.debug(
-              `Reveal Chunk with hash ${colorHex(commitHash)}: ${JSON.stringify(
-                validations.map((validation) => ({
-                  agreementId: validation.agreementId,
-                  provId: validation.providerId,
-                  score: BigInt(validation.score),
-                })),
-                null,
-                2
-              )}`
-            );
+            const mappedValidations = validations.map((validation) => ({
+              agreementId: validation.agreementId,
+              provId: validation.providerId,
+              score: BigInt(validation.score),
+            }));
+
+            this.logger.debug(`Reveal validations commit`, {
+              commitHash,
+              validations: mappedValidations,
+            });
 
             // Generate audit file data
             const { auditFile, stringifiedData, detailsLink } =
               await this.buildAuditFileObject(commitHash as Hex, validations);
 
-            // Log data for debugging
-            this.logger.debug(
-              `JSON.stringify validations and stringifiedData data for commit hash ${colorHex(
-                auditFile.commitHash
-              )}\nvalidations: ${JSON.stringify(
-                validations,
-                null,
-                2
-              )}\n\nstringifiedData: ${stringifiedData}`
-            );
+            this.logger.debug("Reveal validations commit details", {
+              commitHash,
+              detailsLink,
+              auditFileContent: stringifiedData,
+            });
 
             // Call uploaders with the results
             for (const uploader of this.uploaders) {
@@ -584,20 +595,12 @@ export class Validator {
                     {
                       cid: uploadRecord.cid,
                       commitHash: uploadRecord.commitHash,
-                      uploadedBy: uploadRecord.uploadedBy,
+                      uploader: uploadRecord.uploadedBy,
                       uploadedAt: uploadRecord.uploadedAt,
                     }
                   );
                   continue;
                 }
-
-                this.logger.info(
-                  `Audit file of ${colorHex(auditFile.commitHash)} (including ${
-                    auditFile.data.length
-                  } sessions, detailsLink: ${colorKeyword(
-                    detailsLink
-                  )}) uploading with ${uploader.constructor.name}`
-                );
 
                 // Save the data to be uploaded
                 const uploadData = await DB.addUploadRecord(
@@ -624,22 +627,23 @@ export class Validator {
                   this.actorInfo.id
                 );
 
-                this.logger.info(
-                  `Audit file of ${colorHex(auditFile.commitHash)} (including ${
-                    auditFile.data.length
-                  } sessions, detailsLink: ${colorKeyword(
-                    detailsLink
-                  )}) uploaded with ${uploader.constructor.name}`
-                );
+                this.logger.info(`Audit file uploaded`, {
+                  commitHash: auditFile.commitHash,
+                  auditFileContent: stringifiedData,
+                  detailsLink,
+                  uploader: uploader.constructor.name,
+                });
               } catch (err: unknown) {
-                const error = ensureError(err);
-                this.logger.error(
-                  `Error while uploading results of ${colorHex(
-                    auditFile.commitHash
-                  )} (detailsLink: ${colorKeyword(detailsLink)}) with ${
-                    uploader.constructor.name
-                  }: ${error.stack}`
-                );
+                logError({
+                  err,
+                  logger: this.logger,
+                  prefix: `Error while uploading results`,
+                  meta: {
+                    commitHash: auditFile.commitHash,
+                    detailsLink,
+                    uploader: uploader.constructor.name,
+                  },
+                });
               }
             }
 
@@ -648,18 +652,17 @@ export class Validator {
               commitHash as Hex,
               this.actorInfo.ownerAddr,
               config.PROTOCOL_ADDRESS,
-              validations.map((validation) => ({
-                agreementId: validation.agreementId,
-                provId: validation.providerId,
-                score: BigInt(validation.score),
-              }))
+              mappedValidations
             );
 
-            this.logger.info(
-              `${
-                validations.length
-              } validations are revealed (commit hash: ${colorHex(commitHash)})`
-            );
+            this.logger.info(`Validations are revealed`, {
+              commitHash,
+              count: mappedValidations.length,
+            });
+            this.logger.debug("Reveal details", {
+              commitHash,
+              validations: mappedValidations,
+            });
 
             // Mark validations as revealed in the database
             await DB.markAsRevealed(commitHash as Hex);
@@ -683,19 +686,19 @@ export class Validator {
               error.cause.reason?.includes("Array index is out of bounds")
             ) {
               this.logger.warning(
-                `The commit ${colorHex(
-                  commitHash
-                )} is vanished and cannot be revealed anymore, skipping...`
+                `The commit is vanished and cannot be revealed anymore, skipping...`,
+                { commitHash, count: validations.length }
               );
               await DB.markAsVanished(commitHash as Hex);
             } else {
-              this.logger.error(
-                `Error while trying to reveal ${
-                  validations.length
-                } validations (commit hash: ${colorHex(commitHash)}): ${
-                  error.stack
-                }`
-              );
+              logError({
+                err: error,
+                logger: this.logger,
+                prefix: `Error while revealing the results`,
+                meta: {
+                  commitHash,
+                },
+              });
             }
           }
         }
@@ -704,10 +707,11 @@ export class Validator {
           return;
         }
 
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while trying to reveal results: ${error.stack}`
-        );
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while revealing the results`,
+        });
       }
     });
   }
@@ -720,7 +724,6 @@ export class Validator {
   async enterAgreement(offerId: number, sessionId = "") {
     return await this.rpcQueue.queue(async () => {
       this.checkAbort();
-      const loggerOptions = this.createLoggerOptions(sessionId);
       const offer = await this.protocol.getOffer(offerId);
       const provider = (await this.registry.getActor(offer.ownerAddr))!;
       const minDeposit = 2n * 2635200n * offer.fee;
@@ -746,10 +749,10 @@ export class Validator {
       // Update the cache with the Provider name
       await this.getProviderName(provider);
 
-      this.logger.info(
-        `Current USDC balance: ${formattedBalance}`,
-        loggerOptions
-      );
+      this.logger.info(`Current USDC balance`, {
+        balance: formattedBalance,
+        sessionId,
+      });
 
       // Check balance
       if (balance < totalCost) {
@@ -760,10 +763,10 @@ export class Validator {
       // Check allowance and increase if it's not enough
       if (ptAllowance < totalCost) {
         const formattedAmount = formatUnits(totalCost, DECIMALS.USDC);
-        this.logger.info(
-          `USDC allowance is setting (to ${formattedAmount} USDC)`,
-          loggerOptions
-        );
+        this.logger.info(`USDC allowance is setting`, {
+          sessionId,
+          amount: formattedAmount,
+        });
 
         const { request } = await throttleRequest(
           () =>
@@ -779,18 +782,18 @@ export class Validator {
 
         await writeContract(rpcClient, request, {
           onContractWrite: (hash) => {
-            this.logger.debug(
-              `USDC Allowance TX hash: ${colorHex(hash)}`,
-              loggerOptions
-            );
+            this.logger.debug(`USDC Allowance TX hash`, {
+              sessionId,
+              hash,
+            });
           },
         });
       }
 
-      this.logger.info(
-        `Entering a new Agreement with Offer ${colorNumber(offerId)}`,
-        loggerOptions
-      );
+      this.logger.info(`Entering a new Agreement`, {
+        offerId,
+        sessionId,
+      });
 
       this.checkAbort();
       const agreementId = await this.protocol.enterAgreement(
@@ -798,12 +801,11 @@ export class Validator {
         minDeposit
       );
 
-      this.logger.info(
-        `Entered a new Agreement with ID ${colorNumber(
-          agreementId
-        )}, waiting for the Resource to be online...`,
-        loggerOptions
-      );
+      this.logger.info(`Entered a new Agreement`, {
+        agreementId,
+        sessionId,
+        offerId,
+      });
 
       return { agreementId, operatorAddress: provider.operatorAddr };
     });
@@ -819,7 +821,6 @@ export class Validator {
     sessionId = ""
   ): Promise<Resource> {
     const startTs = Date.now();
-    const loggerOptions = this.createLoggerOptions(sessionId);
 
     while (!abortController.signal.aborted) {
       const currentTs = Date.now();
@@ -830,11 +831,11 @@ export class Validator {
         throw new ResourceIsNotOnlineError(agreementId);
       }
       try {
-        this.logger.debug(
-          `Sending get Resource request for ${colorNumber(
-            agreementId
-          )} to ${colorHex(operatorAddress)}`
-        );
+        this.logger.debug(`Sending get Resource request`, {
+          agreementId,
+          operatorAddress: operatorAddress.toLowerCase(),
+          sessionId,
+        });
 
         // Retrieve details of the Resource
         const response = await this.pipe.send(operatorAddress, {
@@ -850,11 +851,11 @@ export class Validator {
           timeout: 15 * 1000,
         });
 
-        this.logger.debug(
-          `Get Resource request  for ${colorNumber(
-            agreementId
-          )} has been sent to ${colorHex(operatorAddress)}`
-        );
+        this.logger.debug(`Get Resource request has been sent`, {
+          agreementId,
+          operatorAddress: operatorAddress.toLowerCase(),
+          sessionId,
+        });
 
         if (response.code != PipeResponseCode.OK) {
           throw new PipeError(response.code, response.body);
@@ -863,16 +864,15 @@ export class Validator {
 
         if (resource) {
           if (resource.deploymentStatus === DeploymentStatus.Running) {
-            this.logger.info(
-              `Resource of Agreement ${colorNumber(agreementId)} is online`,
-              loggerOptions
-            );
+            this.logger.info(`Resource is online`, {
+              agreementId,
+              operatorAddress: operatorAddress.toLowerCase(),
+              sessionId,
+            });
             resource.operatorAddress = operatorAddress;
             return resource;
           } else if (resource.deploymentStatus === DeploymentStatus.Failed) {
-            throw new Error(
-              `Deployment of Resource ${colorNumber(resource.id)} is failed`
-            );
+            throw new Error(`Deployment of Resource ${resource.id} is failed`);
           }
         }
       } catch (err: unknown) {
@@ -881,12 +881,12 @@ export class Validator {
           // Ignore not found errors. We just need to wait a little bit more
           // until the Provider picks up the creation event from the blockchain
           if (error.code !== PipeResponseCode.NOT_FOUND) {
-            this.logger.warning(
-              `Couldn't retrieve details of Agreement ${colorNumber(
-                agreementId
-              )}: ${error.stack}`,
-              loggerOptions
-            );
+            this.logger.warning(`Couldn't retrieve details of Agreement`, {
+              agreementId,
+              operatorAddress: operatorAddress.toLowerCase(),
+              sessionId,
+              stacktrace: error.stack,
+            });
           }
 
           // Ignore timeout errors since we have our timeout
@@ -906,10 +906,10 @@ export class Validator {
    */
   async closeAgreement(agreementId: number, sessionId = "") {
     await this.rpcQueue.queue(async () => {
-      this.logger.info(
-        `Closing Agreement ${colorNumber(agreementId)}`,
-        this.createLoggerOptions(sessionId)
-      );
+      this.logger.info(`Closing Agreement`, {
+        agreementId,
+        sessionId,
+      });
 
       // We might get an abort signal, in that case the global
       // rpc client will stop working so we need to create another
@@ -924,10 +924,10 @@ export class Validator {
 
       await protocol.closeAgreement(agreementId);
 
-      this.logger.info(
-        `Agreement ${colorNumber(agreementId)} closed`,
-        this.createLoggerOptions(sessionId)
-      );
+      this.logger.info(`Agreement closed`, {
+        agreementId,
+        sessionId,
+      });
     }, true);
   }
 
@@ -945,12 +945,18 @@ export class Validator {
     for (const uploader of this.uploaders) {
       try {
         await uploader.close();
-        this.logger.info(`Uploader ${uploader.constructor.name} closed`);
+        this.logger.info(`Uploader closed`, {
+          uploader: uploader.constructor.name,
+        });
       } catch (err: unknown) {
-        const error = ensureError(err);
-        this.logger.error(
-          `Error while closing uploader ${uploader.constructor.name}: ${error.stack}`
-        );
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while closing uploader`,
+          meta: {
+            uploader: uploader.constructor.name,
+          },
+        });
       }
     }
 
@@ -963,12 +969,15 @@ export class Validator {
 
     // TODO: Use a better cache workflow. What would happen if the Provider details are updated?
     if (this.providerNames[providerId] === undefined) {
-      this.logger.info(`Getting details of the Provider ${providerId}`);
-
       const provider =
         typeof providerOrId === "number"
           ? await this.registry.getActor(providerId)
           : providerOrId;
+
+      this.logger.info(`Getting details of the Provider`, {
+        providerId,
+        operatorAddress: provider!.operatorAddr.toLowerCase(),
+      });
 
       const response = await this.pipe.send(provider!.operatorAddr, {
         method: PipeMethod.GET,
@@ -978,11 +987,12 @@ export class Validator {
       });
 
       if (response.code !== PipeResponseCode.OK) {
-        this.logger.error(
-          `Error while getting details of the Provider ${
-            provider!.id
-          } (${colorHex(provider!.ownerAddr)})`
-        );
+        this.logger.error(`Error while getting details of the Provider`, {
+          providerId,
+          operatorAddress: provider!.operatorAddr.toLowerCase(),
+          code: response.code,
+          stacktrace: response.body,
+        });
         throw new PipeError(response.code, response.body);
       }
 
@@ -991,9 +1001,9 @@ export class Validator {
 
       if (!details) {
         throw new Error(
-          `Invalid details file of the Provider ${provider!.id} (${colorHex(
+          `Invalid details file of the Provider ${provider!.id} (${
             provider!.ownerAddr
-          )})`
+          })`
         );
       }
 
@@ -1087,7 +1097,12 @@ export class Validator {
 
       // Setup routes
       this.pipe.route(PipeMethod.GET, "/details", async (req) => {
-        this.logger.info(`Got Pipe request on /details with ID ${req.id}`);
+        this.logger.info(`Got Pipe request`, {
+          id: req.id,
+          method: req.method,
+          path: req.path,
+          requester: req.requester.toLowerCase(),
+        });
 
         const body = validateBodyOrParams(req.body, z.array(z.string()).min(1));
         const files = await DB.getDetailFiles(body);
@@ -1105,9 +1120,9 @@ export class Validator {
       });
 
       if (!abortController.signal.aborted) {
-        this.logger.info(
-          `Operator ${colorHex(this.actorInfo.operatorAddr)} initialized`
-        );
+        this.logger.info(`Operator initialized`, {
+          operatorAddress: this.actorInfo.operatorAddr.toLowerCase(),
+        });
       }
     } else {
       this.pipe = pipes[this.actorInfo.operatorAddr];
@@ -1119,9 +1134,7 @@ export class Validator {
 
     if (!actorInfo) {
       throw new Error(
-        `Validator "${this.tag}" (${colorHex(
-          this.account.address
-        )}) is not registered in the Network. Please try to register it and restart the daemon.`
+        `Validator "${this.tag}" (${this.account.address}) is not registered in the Network. Please try to register it and restart the daemon.`
       );
     }
 

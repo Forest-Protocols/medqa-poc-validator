@@ -4,7 +4,6 @@ import { logError, logger } from "./core/logger";
 import { readdirSync, readFileSync, rmSync, statSync } from "fs";
 import { DB } from "./database/client";
 import { Validator } from "./core/validator";
-import { colorHex } from "./core/color";
 import { IntervalValidationExecutor } from "./executors/IntervalValidationExecutor";
 import { ProtocolValidationExecutor } from "./protocol/executor";
 import { BaseValidationExecutor } from "./base/BaseValidationExecutor";
@@ -43,13 +42,14 @@ async function setupValidators() {
   for (const [tag, valConfig] of Object.entries(
     config.validatorConfigurations
   )) {
-    logger.info(`Initializing validator "${tag}"`);
+    logger.info(`Initializing validator`, { validatorTag: tag });
     config.validators[tag] = await Validator.create(tag, valConfig);
-    logger.info(
-      `Validator "${tag}" (${colorHex(
-        config.validators[tag].actorInfo.ownerAddr
-      )}) initialized`
-    );
+    logger.info(`Validator initialized`, {
+      validatorTag: tag,
+      validatorId: config.validators[tag].actorInfo.id,
+      validatorOwnerAddress:
+        config.validators[tag].actorInfo.ownerAddr.toLowerCase(),
+    });
   }
 }
 
