@@ -5,7 +5,7 @@ import { config } from "@/core/config";
 import { abortController } from "@/core/signal";
 import { ValidationSession } from "@/core/session";
 import { DB } from "@/database/client";
-import { ValidationSessionInfo } from "@/core/types";
+import { ValidationSessionInfo, TestResult } from "@/core/types";
 
 /**
  * Base class for Validation executors.
@@ -38,7 +38,7 @@ export abstract class BaseValidationExecutor {
    * Saves the given Validation info alongside the score to the database.
    */
   async saveTestResults(info: ValidationSessionInfo, score: number) {
-    if (info.testResults.length > 0) {
+    if (info.agreementId) {
       try {
         await DB.saveValidation(
           {
@@ -51,7 +51,7 @@ export abstract class BaseValidationExecutor {
             agreementId: info.agreementId,
             score: score,
           },
-          info.testResults
+          info.testResults.length > 0 ? info.testResults : [{isSuccess: false, raw: "Validation session failed", result: {}, testName: "Failed"} as TestResult]
         );
       } catch (err) {
         logError({
@@ -72,22 +72,23 @@ export abstract class BaseValidationExecutor {
    */
   async saveValidationSession(session: ValidationSession) {
     // If the given session is executed and has some results
-    if (session.testResults.length > 0 && session.validation) {
-      try {
-        const score = await session.validation.calculateScore(
+    try {
+      let score = 0;
+      if (session.testResults.length > 0 && session.validation) {
+        score = await session.validation.calculateScore(
           session.testResults
-        );
-        await this.saveTestResults(session.info, score);
-      } catch (err) {
+        ); 
+      }
+      await this.saveTestResults(session.info, score);
+    } catch (err) {
         logError({
           err,
           logger: this.logger,
           prefix: `Session results couldn't save to the database`,
           meta: {
             sessionId: session.id,
-          },
-        });
-      }
+        },
+      });
     }
   }
 
@@ -173,11 +174,17 @@ export abstract class BaseValidationExecutor {
 
     for (const offer of offers) {
       for (const validatorTag of options.validatorTags) {
+        const provider = await config.validators[validatorTag].registry.getActor(offer.ownerAddr);
+        if (!provider) {
+          this.logger.warning(`Provider not found for offer ${offer.id}`);
+          continue;
+        }
         validations.push(
           new Promise((resolve, reject) => {
             const session = new ValidationSession({
               offer,
               validator: validatorTag,
+              provider: provider,
               parameters: options.parameters,
             });
             session

@@ -746,9 +746,6 @@ export class Validator {
       ]);
       const formattedBalance = formatUnits(balance, DECIMALS.USDC);
 
-      // Update the cache with the Provider name
-      await this.getProviderName(provider);
-
       this.logger.info(`Current USDC balance`, {
         balance: formattedBalance,
         sessionId,
@@ -807,7 +804,7 @@ export class Validator {
         offerId,
       });
 
-      return { agreementId, operatorAddress: provider.operatorAddr };
+      return { agreementId, operatorAddress: provider.operatorAddr, provider };
     });
   }
 
@@ -876,6 +873,7 @@ export class Validator {
           }
         }
       } catch (err: unknown) {
+        await sleep(10000);
         const error = ensureError(err);
         if (error instanceof PipeError) {
           // Ignore not found errors. We just need to wait a little bit more
@@ -963,58 +961,6 @@ export class Validator {
     this.logger.debug(`Cleaned!`);
   }
 
-  private async getProviderName(providerOrId: number | Actor) {
-    const providerId =
-      typeof providerOrId === "number" ? providerOrId : providerOrId.id;
-
-    // TODO: Use a better cache workflow. What would happen if the Provider details are updated?
-    if (this.providerNames[providerId] === undefined) {
-      const provider =
-        typeof providerOrId === "number"
-          ? await this.registry.getActor(providerId)
-          : providerOrId;
-
-      this.logger.info(`Getting details of the Provider`, {
-        providerId,
-        operatorAddress: provider!.operatorAddr.toLowerCase(),
-      });
-
-      const response = await this.pipe.send(provider!.operatorAddr, {
-        method: PipeMethod.GET,
-        path: "/details",
-        body: [provider!.detailsLink],
-        timeout: 15_000, // 15 seconds
-      });
-
-      if (response.code !== PipeResponseCode.OK) {
-        this.logger.error(`Error while getting details of the Provider`, {
-          providerId,
-          operatorAddress: provider!.operatorAddr.toLowerCase(),
-          code: response.code,
-          stacktrace: response.body,
-        });
-        throw new PipeError(response.code, response.body);
-      }
-
-      const [detailsFileContent] = response.body;
-      const details = tryParseJSON<ProviderDetails>(detailsFileContent);
-
-      if (!details) {
-        throw new Error(
-          `Invalid details file of the Provider ${provider!.id} (${
-            provider!.ownerAddr
-          })`
-        );
-      }
-
-      // TODO: Validate the details
-
-      this.providerNames[provider!.id] = details.name;
-    }
-
-    return this.providerNames[providerId];
-  }
-
   private async buildAuditFileObject(
     commitHash: Hex,
     validations: AggregatedValidation[]
@@ -1044,8 +990,6 @@ export class Validator {
 
             return stringifiedA.localeCompare(stringifiedB);
           }),
-
-          providerName: await this.getProviderName(v.providerId),
           protocol: {
             name: this.protocolName,
             address: config.PROTOCOL_ADDRESS,

@@ -6,7 +6,7 @@ import winston from "winston";
 import { logError, logger as mainLogger } from "./logger";
 import { Validation } from "@/protocol/validation";
 import { sleep } from "@/utils/sleep";
-import { Offer, TerminationError } from "@forest-protocols/sdk";
+import { Offer, Provider, TerminationError } from "@forest-protocols/sdk";
 import { abortController } from "./signal";
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnoprstuvyz", 15);
@@ -21,6 +21,7 @@ export class ValidationSession {
   finishedAt: Date | undefined;
   validation: Validation | undefined;
   validator: Validator;
+  provider: Provider;
   logger: winston.Logger;
   offer: Offer;
   resource: Resource | undefined;
@@ -43,6 +44,12 @@ export class ValidationSession {
     offer: Offer;
 
     /**
+     * The Provider that is going to be used
+     */
+    provider: Provider;
+
+
+    /**
      * The parameters that is going to be passed to the Validation
      */
     parameters?: Record<string, unknown>;
@@ -55,6 +62,7 @@ export class ValidationSession {
 
     this.parameters = params.parameters;
     this.offer = params.offer;
+    this.provider = params.provider;
     this.logger = mainLogger.child({
       context: `Session`,
       id: this.id,
@@ -123,17 +131,15 @@ export class ValidationSession {
     }
 
     if (
-      this.agreementId === undefined ||
-      this.resource === undefined ||
-      this.validation === undefined
+      this.agreementId === undefined
     ) {
-      throw new Error(`Validation session doesn't have any information`);
+      throw new Error(`Validation session doesn't have required information`);
     }
 
     return {
       agreementId: this.agreementId,
       offerId: this.offer.id,
-      providerId: this.resource.providerId,
+      providerId: this.provider.id,
       sessionId: this.id,
       startedAt: this.startedAt,
       validatorId: this.validator.actorInfo.id,
@@ -166,6 +172,7 @@ export class ValidationSession {
     );
     const operatorAddress = enterAgreementResult.operatorAddress;
     this.agreementId = enterAgreementResult.agreementId;
+    this.provider = enterAgreementResult.provider;
 
     // Give some time to the Provider
     await sleep(5000);
