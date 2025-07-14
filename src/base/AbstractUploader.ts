@@ -12,7 +12,9 @@ export abstract class AbstractUploader {
 
   constructor(validator: Validator) {
     this.logger = logger.child({
-      context: `Validator(${validator.tag}).${this.constructor.name}`,
+      context: this.constructor.name,
+      validatorTag: validator.tag,
+      validatorOwnerAddress: validator.actorInfo.ownerAddr.toLowerCase(),
     });
     this.validator = validator;
   }

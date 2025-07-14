@@ -4,10 +4,9 @@ import { Validator } from "./validator";
 import { config } from "./config";
 import winston from "winston";
 import { logError, logger as mainLogger } from "./logger";
-import { colorNumber } from "./color";
 import { Validation } from "@/protocol/validation";
 import { sleep } from "@/utils/sleep";
-import { Offer, TerminationError } from "@forest-protocols/sdk";
+import { Offer, Provider, TerminationError } from "@forest-protocols/sdk";
 import { abortController } from "./signal";
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnoprstuvyz", 15);
@@ -22,6 +21,7 @@ export class ValidationSession {
   finishedAt: Date | undefined;
   validation: Validation | undefined;
   validator: Validator;
+  provider: Provider;
   logger: winston.Logger;
   offer: Offer;
   resource: Resource | undefined;
@@ -44,6 +44,12 @@ export class ValidationSession {
     offer: Offer;
 
     /**
+     * The Provider that is going to be used
+     */
+    provider: Provider;
+
+
+    /**
      * The parameters that is going to be passed to the Validation
      */
     parameters?: Record<string, unknown>;
@@ -56,8 +62,13 @@ export class ValidationSession {
 
     this.parameters = params.parameters;
     this.offer = params.offer;
+    this.provider = params.provider;
     this.logger = mainLogger.child({
-      context: `Validator(${this.validator.tag}/${this.id})`,
+      context: `Session`,
+      id: this.id,
+      offerId: this.offer.id,
+      validatorTag: this.validator.tag,
+      validatorOwnerAddress: this.validator.actorInfo.ownerAddr.toLowerCase(),
     });
   }
 
@@ -65,11 +76,7 @@ export class ValidationSession {
    * Starts the session and saves the test results into `testResults` array.
    */
   async start() {
-    this.logger.info(
-      `Starting a new Validation session for Offer ${colorNumber(
-        this.offer.id
-      )} ->`
-    );
+    this.logger.info(`Starting a new Validation session`);
 
     try {
       await this.enterAgreement();
@@ -86,7 +93,10 @@ export class ValidationSession {
       logError({
         err,
         logger: this.logger,
-        prefix: `Error in execution of the Validation process:`,
+        prefix: `Error in execution of the Validation process`,
+        meta: {
+          agreementId: this.agreementId,
+        },
       });
     } finally {
       // If the Agreement is entered, close it
@@ -97,17 +107,18 @@ export class ValidationSession {
             logError({
               err,
               logger: this.logger,
-              prefix: `Error while closing Agreement ${colorNumber(
-                this.agreementId!
-              )}:`,
+              prefix: `Error while closing Agreement`,
+              meta: {
+                agreementId: this.agreementId,
+              },
             })
           );
       }
 
       this.finishedAt = new Date();
-      this.logger.info(
-        `<- Validation session for Offer ${colorNumber(this.offer.id)} is over`
-      );
+      this.logger.info(`Validation session is over`, {
+        agreementId: this.agreementId,
+      });
     }
   }
 
@@ -120,17 +131,15 @@ export class ValidationSession {
     }
 
     if (
-      this.agreementId === undefined ||
-      this.resource === undefined ||
-      this.validation === undefined
+      this.agreementId === undefined
     ) {
-      throw new Error(`Validation session doesn't have any information`);
+      throw new Error(`Validation session doesn't have required information`);
     }
 
     return {
       agreementId: this.agreementId,
       offerId: this.offer.id,
-      providerId: this.resource.providerId,
+      providerId: this.provider.id,
       sessionId: this.id,
       startedAt: this.startedAt,
       validatorId: this.validator.actorInfo.id,
@@ -163,6 +172,7 @@ export class ValidationSession {
     );
     const operatorAddress = enterAgreementResult.operatorAddress;
     this.agreementId = enterAgreementResult.agreementId;
+    this.provider = enterAgreementResult.provider;
 
     // Give some time to the Provider
     await sleep(5000);

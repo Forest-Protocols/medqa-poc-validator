@@ -1,8 +1,6 @@
 import { indexerClient } from "@/core/client";
-import { colorHex, colorNumber } from "@/core/color";
 import { config } from "@/core/config";
 import { logError, logger as mainLogger } from "@/core/logger";
-import { ensureError } from "@/utils/ensure-error";
 import { abortController } from "./signal";
 import { sleep } from "@/utils/sleep";
 import { isAxiosError } from "axios";
@@ -36,50 +34,60 @@ export async function listenToBlockchain() {
         const validatorTags = Object.keys(config.validators);
         const validator = config.validators[validatorTags[0]];
         try {
-          logger.info(
-            `Reveal Window is over, closing the Epoch (${colorNumber(
-              currentEpochEndBlock
-            )})`
-          );
+          logger.info(`Reveal Window is over, closing the Epoch`, {
+            epochEndBlock: currentEpochEndBlock,
+            validatorTag: validator.tag,
+            validatorOwnerAddress: validator.actorInfo.ownerAddr.toLowerCase(),
+          });
           await validator.closeEpoch();
 
-          logger.info(
-            `The epoch ${colorNumber(
-              currentEpochEndBlock
-            )} is closed by Validator "${validator.tag}" (${colorHex(
-              validator.actorInfo.ownerAddr
-            )})`
-          );
+          logger.info(`The epoch is closed by Validator`, {
+            epochEndBlock: currentEpochEndBlock,
+            validatorTag: validator.tag,
+            validatorOwnerAddress: validator.actorInfo.ownerAddr.toLowerCase(),
+          });
           epochClosed = true;
         } catch (err: unknown) {
-          const error = ensureError(err);
-          logger.warning(
-            `Epoch (${colorNumber(currentEpochEndBlock)}) couldn't be closed: ${
-              error.stack
-            }`
-          );
+          logError({
+            err,
+            logger,
+            prefix: `Epoch couldn't be closed`,
+            meta: {
+              epochEndBlock: currentEpochEndBlock,
+              validatorTag: validator.tag,
+              validatorOwnerAddress:
+                validator.actorInfo.ownerAddr.toLowerCase(),
+            },
+          });
         }
 
         if (epochClosed && config.EMIT_REWARDS) {
           try {
-            logger.info(
-              `Emitting rewards for the closed Epoch (${colorNumber(
-                currentEpochEndBlock
-              )})`
-            );
+            logger.info(`Emitting rewards for the closed Epoch`, {
+              epochEndBlock: currentEpochEndBlock,
+              validatorTag: validator.tag,
+              validatorOwnerAddress:
+                validator.actorInfo.ownerAddr.toLowerCase(),
+            });
             await validator.emitRewards(currentEpochEndBlock);
-            logger.info(
-              `Rewards are emitted for the closed Epoch (${colorNumber(
-                currentEpochEndBlock
-              )})`
-            );
+            logger.info(`Rewards are emitted for the closed Epoch`, {
+              epochEndBlock: currentEpochEndBlock,
+              validatorTag: validator.tag,
+              validatorOwnerAddress:
+                validator.actorInfo.ownerAddr.toLowerCase(),
+            });
           } catch (err) {
-            const error = ensureError(err);
-            logger.warning(
-              `Rewards couldn't be emitted for Epoch (${colorNumber(
-                currentEpochEndBlock
-              )}): ${error.stack}`
-            );
+            logError({
+              err,
+              logger,
+              prefix: `Rewards couldn't be emitted for Epoch`,
+              meta: {
+                epochEndBlock: currentEpochEndBlock,
+                validatorTag: validator.tag,
+                validatorOwnerAddress:
+                  validator.actorInfo.ownerAddr.toLowerCase(),
+              },
+            });
           }
         }
 
@@ -98,9 +106,9 @@ export async function listenToBlockchain() {
         // (they may have faced with errors with the old notification)
         if (!isRevealWindowNotified) {
           isRevealWindowNotified = true;
-          logger.debug(
-            "Reveal window detected. Notifying validators to reveal their results"
-          );
+          logger.info(`Reveal window detected. Notifying validators`, {
+            epochEndBlock: currentEpochEndBlock,
+          });
         }
 
         const promises: Promise<unknown>[] = [];

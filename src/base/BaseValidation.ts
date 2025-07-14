@@ -2,8 +2,7 @@ import { Logger } from "winston";
 import { AbstractTestConstructor } from "./AbstractTest";
 import { Resource, TestResult } from "@/core/types";
 import { colorKeyword } from "@/core/color";
-import { ensureError } from "@/utils/ensure-error";
-import { logger as mainLogger } from "@/core/logger";
+import { logError, logger as mainLogger } from "@/core/logger";
 import { config } from "@/core/config";
 import { AbstractPipe } from "@forest-protocols/sdk";
 import { isTermination } from "@/utils/is-termination";
@@ -49,7 +48,11 @@ export class BaseValidation<
     const validation = new this();
 
     validation.logger = mainLogger.child({
-      context: `Validator(${validatorTag}/${sessionId})`,
+      context: `Validation`,
+      validatorTag,
+      validatorOwnerAddress:
+        config.validators[validatorTag].actorInfo.ownerAddr.toLowerCase(),
+      sessionId,
     });
 
     validation.parameters = parameters || {};
@@ -79,21 +82,34 @@ export class BaseValidation<
       const Test = this.tests[i];
       const testName = `${colorKeyword(Test.name)} (test ${i + 1})`;
       try {
-        this.logger.info(`Starting ${testName}...`);
+        this.logger.info(`Starting test`, {
+          testName,
+          testNumber: i + 1,
+        });
         const testInstance = new Test(this.validatorTag, this.sessionId);
         const testResult = await testInstance.execute(this);
 
         testResults.push(testResult);
 
-        this.logger.info(`${testName} completed successfully`);
+        this.logger.info(`Test completed`, {
+          testName,
+          testNumber: i + 1,
+        });
       } catch (err: unknown) {
         // If this is the termination error, re-throw it and interrupt the process, no need to continue
         if (isTermination(err)) {
           throw err;
         }
 
-        const error = ensureError(err);
-        this.logger.error(`Error while executing ${testName}: ${error.stack}`);
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Error while executing test`,
+          meta: {
+            testName,
+            testNumber: i + 1,
+          },
+        });
       }
     }
     await this.onFinish();

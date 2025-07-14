@@ -81,8 +81,8 @@ class DatabaseClient {
       );
   }
 
-  async isUploadedBy(cid: string, uploadedBy: string) {
-    return await this.client
+  async getUpload(cid: string, uploadedBy: string) {
+    const [record] = await this.client
       .select()
       .from(schema.uploadsTable)
       .where(
@@ -91,6 +91,8 @@ class DatabaseClient {
           eq(schema.uploadsTable.uploadedBy, uploadedBy)
         )
       );
+
+    return record;
   }
 
   async getUploads(validatorId: number, uploaded = false) {

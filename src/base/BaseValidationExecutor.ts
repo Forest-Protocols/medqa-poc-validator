@@ -3,12 +3,9 @@ import { logError, logger as mainLogger } from "@/core/logger";
 import { rpcClient } from "@/core/client";
 import { config } from "@/core/config";
 import { abortController } from "@/core/signal";
-import { yellow } from "ansis";
 import { ValidationSession } from "@/core/session";
 import { DB } from "@/database/client";
-import { ValidationSessionInfo } from "@/core/types";
-import { ensureError } from "@/utils/ensure-error";
-import { isTermination } from "@/utils/is-termination";
+import { ValidationSessionInfo, TestResult } from "@/core/types";
 
 /**
  * Base class for Validation executors.
@@ -41,7 +38,7 @@ export abstract class BaseValidationExecutor {
    * Saves the given Validation info alongside the score to the database.
    */
   async saveTestResults(info: ValidationSessionInfo, score: number) {
-    if (info.testResults.length > 0) {
+    if (info.agreementId) {
       try {
         await DB.saveValidation(
           {
@@ -54,15 +51,17 @@ export abstract class BaseValidationExecutor {
             agreementId: info.agreementId,
             score: score,
           },
-          info.testResults
+          info.testResults.length > 0 ? info.testResults : [{isSuccess: false, raw: "Validation session failed", result: {}, testName: "Failed"} as TestResult]
         );
       } catch (err) {
-        if (!isTermination(err)) {
-          const error = ensureError(err);
-          this.logger.warning(
-            `Session ${info.sessionId} results couldn't save to the database: ${error.stack}`
-          );
-        }
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Session results couldn't save to the database`,
+          meta: {
+            sessionId: info.sessionId,
+          },
+        });
       }
     }
   }
@@ -73,20 +72,23 @@ export abstract class BaseValidationExecutor {
    */
   async saveValidationSession(session: ValidationSession) {
     // If the given session is executed and has some results
-    if (session.testResults.length > 0 && session.validation) {
-      try {
-        const score = await session.validation.calculateScore(
+    try {
+      let score = 0;
+      if (session.testResults.length > 0 && session.validation) {
+        score = await session.validation.calculateScore(
           session.testResults
-        );
-        await this.saveTestResults(session.info, score);
-      } catch (err) {
-        if (!isTermination(err)) {
-          const error = ensureError(err);
-          this.logger.warning(
-            `Session ${session.id} results couldn't save to the database: ${error.stack}`
-          );
-        }
+        ); 
       }
+      await this.saveTestResults(session.info, score);
+    } catch (err) {
+        logError({
+          err,
+          logger: this.logger,
+          prefix: `Session results couldn't save to the database`,
+          meta: {
+            sessionId: session.id,
+        },
+      });
     }
   }
 
@@ -109,7 +111,12 @@ export abstract class BaseValidationExecutor {
         logError({
           err,
           logger: this.logger,
-          prefix: `Error while committing results by Validator ${validatorTag}:`,
+          prefix: `Error while committing results by Validator`,
+          meta: {
+            validatorTag,
+            validatorOwnerAddress:
+              config.validators[validatorTag].actorInfo.ownerAddr.toLowerCase(),
+          },
         })
       );
     }
@@ -119,17 +126,17 @@ export abstract class BaseValidationExecutor {
    * Starts the executor
    */
   async start() {
-    this.logger.info(
-      `Executor ${yellow.bold(this.constructor.name)} is started`
-    );
+    this.logger.info(`Executor started`);
     try {
       await this.exec();
     } catch (err) {
-      logError({ err, logger: this.logger });
+      logError({
+        err,
+        logger: this.logger,
+        prefix: `Executor failed`,
+      });
     } finally {
-      this.logger.warning(
-        `Executor ${yellow.bold(this.constructor.name)} is finished`
-      );
+      this.logger.warning(`Executor finished`);
     }
   }
 
@@ -167,11 +174,17 @@ export abstract class BaseValidationExecutor {
 
     for (const offer of offers) {
       for (const validatorTag of options.validatorTags) {
+        const provider = await config.validators[validatorTag].registry.getActor(offer.ownerAddr);
+        if (!provider) {
+          this.logger.warning(`Provider not found for offer ${offer.id}`);
+          continue;
+        }
         validations.push(
           new Promise((resolve, reject) => {
             const session = new ValidationSession({
               offer,
               validator: validatorTag,
+              provider: provider,
               parameters: options.parameters,
             });
             session

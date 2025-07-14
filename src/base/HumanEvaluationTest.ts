@@ -64,11 +64,10 @@ export abstract class HumanEvaluationTest<
         }
       );
 
-      this.logger.info(
-        `Place your evaluations to file "${fileName}" within ${readableTime(
-          this.waitEvaluationsFor
-        )}`
-      );
+      this.logger.info(`Place your evaluations to the file`, {
+        fileName,
+        waitEvaluationsFor: readableTime(this.waitEvaluationsFor),
+      });
 
       const startTime = Date.now();
       while (true) {
@@ -76,7 +75,9 @@ export abstract class HumanEvaluationTest<
         const diff = Date.now() - startTime;
 
         if (diff > this.waitEvaluationsFor) {
-          this.logger.info(`Time is up for ${fileName}. Loading results`);
+          this.logger.info(`Time is up for the file. Loading results`, {
+            fileName,
+          });
           break;
         }
       }
