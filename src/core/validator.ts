@@ -1019,7 +1019,7 @@ export class Validator {
   private async initPipe(operatorPrivateKey: Hex) {
     // If there is no Pipe instance for this operator, instantiate one
     if (!pipes[this.actorInfo.operatorAddr]) {
-      const port = config.HTTP_PIPE_PORT_OFFSET + Object.keys(pipes).length + 1;
+      const port = config.validatorConfigurations[this.tag].operatorPipePort;
       this.pipe = new HTTPPipe(operatorPrivateKey, {
         signal: abortController.signal,
         port,

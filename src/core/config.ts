@@ -199,7 +199,6 @@ function parseEnvVariables() {
         .string()
         .default("https://bwnserbjjtxgkaydkmtk.supabase.co"),
       PEERBENCH_API_URL: z.string().default("https://peerbench.ai/api"),
-      HTTP_PIPE_PORT_OFFSET: z.coerce.number().default(1552),
     })
     .superRefine((value, ctx) => {
       if (
