@@ -15,6 +15,9 @@ services:
       context: .
     env_file:
       - .env
+    ports:
+      # Expose 100 ports within the range for the possible HTTP Pipes
+      - "1552-1652:1552-1652"
     volumes:
       - ./data:/daemon/data
     restart: unless-stopped
