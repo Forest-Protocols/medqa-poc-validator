@@ -73,6 +73,7 @@ export type Resource = {
   providerId: number;
   providerAddress: Address;
   operatorAddress: Address;
+  operatorEndpoint: string;
   ptAddress: Address;
 };
 

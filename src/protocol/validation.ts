@@ -1,7 +1,7 @@
 import { TestResult } from "@/core/types";
 import { BaseValidation } from "@/base/BaseValidation";
 import { ExampleTest } from "./tests/ExampleTest";
-import { PipeMethod } from "@forest-protocols/sdk";
+import { PipeMethods } from "@forest-protocols/sdk";
 import { AbstractTestConstructor } from "@/base/AbstractTest";
 import { ExampleHumanEvaluation } from "./tests/ExampleHumanEvaluation";
 
@@ -65,9 +65,9 @@ export class Validation extends BaseValidation {
    * An example one that calls Pipe endpoints:
    */
   async callEndpoint(path: `/${string}`, body: any) {
-    return await this.pipe.send(this.resource.operatorAddress, {
+    return await this.pipe.send(this.resource.operatorEndpoint, {
       path,
-      method: PipeMethod.GET,
+      method: PipeMethods.GET,
       body,
     });
   }
