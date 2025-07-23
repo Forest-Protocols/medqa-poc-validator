@@ -16,8 +16,8 @@ services:
     env_file:
       - .env
     ports:
-      # Expose 100 ports within the range for the possible HTTP Pipes
-      - "1552-1652:1552-1652"
+      # TODO: Expose the ports for the HTTP Pipes
+      - 24721:24721
     volumes:
       - ./data:/daemon/data
     restart: unless-stopped
