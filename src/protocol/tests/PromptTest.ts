@@ -20,7 +20,7 @@ export class PromptTest extends PerformanceTest<PromptTestResult, Validation> {
     this.logger.debug(`Executing prompt: ${JSON.stringify(prompt, null, 2)}`);
 
     const pipe = validation.validator.pipe;
-    const response = await pipe.send(validation.resource.operatorAddress, {
+    const response = await pipe.send(validation.resource.operatorEndpoint, {
       method: PipeMethod.POST,
       path: "/chat/completions",
       timeout: 15_000,
