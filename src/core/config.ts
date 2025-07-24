@@ -6,14 +6,13 @@ import {
   ForestSlasherAddress,
   ForestTokenAddress,
   getContractAddressByChain,
-  privateKeySchema,
+  PrivateKeySchema,
   setGlobalRateLimit,
   setGlobalRateLimitTimeWindow,
   USDCAddress,
 } from "@forest-protocols/sdk";
 import { Address } from "viem";
 import { Validator } from "./validator";
-import { ValidatorConfiguration } from "./types";
 import dotenv from "@dotenvx/dotenvx";
 import { parseTime } from "@/utils/parse-time";
 
@@ -22,47 +21,51 @@ const nonEmptyStringSchema = z.string().nonempty("Shouldn't be empty");
 
 function parseValidatorConfigurations() {
   const validatorSchema = z.object({
-    validatorWalletPrivateKey: privateKeySchema,
-    billingWalletPrivateKey: privateKeySchema,
-    operatorWalletPrivateKey: privateKeySchema,
+    validatorWalletPrivateKey: PrivateKeySchema,
+    billingWalletPrivateKey: PrivateKeySchema,
+    operatorWalletPrivateKey: PrivateKeySchema,
+    operatorPipePort: z.coerce.number().positive(),
   });
 
-  const validatorConfigurations: Record<string, ValidatorConfiguration> = {};
+  const validators: {
+    [validatorTag: string]: z.infer<typeof validatorSchema>;
+  } = {};
 
-  // Parse private keys of the Validators
-  const regex = /^(VALIDATOR|BILLING|OPERATOR)_PRIVATE_KEY_([\w]+)$/;
+  const pkRegex =
+    /^(?<keyType>((VALIDATOR|BILLING|OPERATOR)_PRIVATE_KEY)|OPERATOR_PIPE_PORT)_(?<validatorTag>[\w]+)$/;
   for (const [name, value] of Object.entries(process.env)) {
-    const match = name.match(regex);
+    const match = name.match(pkRegex);
     if (match) {
-      const keyType = match[1];
-      const providerTag = match[2];
+      const keyType = match.groups?.keyType as string;
+      const validatorTag = match.groups?.validatorTag as string;
 
-      if (!validatorConfigurations[providerTag]) {
-        validatorConfigurations[providerTag] = {
+      if (!validators[validatorTag]) {
+        validators[validatorTag] = {
           billingWalletPrivateKey: "0x",
           operatorWalletPrivateKey: "0x",
           validatorWalletPrivateKey: "0x",
+          operatorPipePort: 0,
         };
       }
 
       switch (keyType) {
-        case "VALIDATOR":
-          validatorConfigurations[providerTag].validatorWalletPrivateKey =
-            value as Address;
+        case "VALIDATOR_PRIVATE_KEY":
+          validators[validatorTag].validatorWalletPrivateKey = value as Address;
           break;
-        case "OPERATOR":
-          validatorConfigurations[providerTag].operatorWalletPrivateKey =
-            value as Address;
+        case "OPERATOR_PRIVATE_KEY":
+          validators[validatorTag].operatorWalletPrivateKey = value as Address;
           break;
-        case "BILLING":
-          validatorConfigurations[providerTag].billingWalletPrivateKey =
-            value as Address;
+        case "BILLING_PRIVATE_KEY":
+          validators[validatorTag].billingWalletPrivateKey = value as Address;
+          break;
+        case "OPERATOR_PIPE_PORT":
+          validators[validatorTag].operatorPipePort = parseInt(value as string);
           break;
       }
     }
   }
 
-  for (const [validatorTag, keys] of Object.entries(validatorConfigurations)) {
+  for (const [validatorTag, keys] of Object.entries(validators)) {
     const validation = validatorSchema.safeParse(keys);
 
     if (validation.error) {
@@ -75,8 +78,7 @@ function parseValidatorConfigurations() {
       process.exit(1);
     }
   }
-
-  return validatorConfigurations;
+  return validators;
 }
 
 function parseEnvVariables() {

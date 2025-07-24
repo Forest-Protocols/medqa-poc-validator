@@ -15,6 +15,9 @@ services:
       context: .
     env_file:
       - .env
+    ports:
+      # TODO: Expose the ports for the HTTP Pipes
+      - 29864:29864
     volumes:
       - ./data:/daemon/data
     restart: unless-stopped

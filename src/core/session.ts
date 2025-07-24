@@ -48,7 +48,6 @@ export class ValidationSession {
      */
     provider: Provider;
 
-
     /**
      * The parameters that is going to be passed to the Validation
      */
@@ -130,9 +129,7 @@ export class ValidationSession {
       throw new TerminationError();
     }
 
-    if (
-      this.agreementId === undefined
-    ) {
+    if (this.agreementId === undefined) {
       throw new Error(`Validation session doesn't have required information`);
     }
 
@@ -170,7 +167,6 @@ export class ValidationSession {
       this.offer.id,
       this.id
     );
-    const operatorAddress = enterAgreementResult.operatorAddress;
     this.agreementId = enterAgreementResult.agreementId;
     this.provider = enterAgreementResult.provider;
 
@@ -180,7 +176,7 @@ export class ValidationSession {
     // Wait until the Resource is being online
     this.resource = await this.validator.waitResourceToBeOnline(
       this.agreementId,
-      operatorAddress,
+      this.provider.endpoint,
       this.id
     );
   }

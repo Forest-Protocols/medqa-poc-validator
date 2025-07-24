@@ -4,8 +4,6 @@ import {
   DeploymentStatus,
   getContractAddressByChain,
   PipeError,
-  PipeMethod,
-  PipeResponseCode,
   Protocol,
   Registry,
   throttleRequest,
@@ -16,19 +14,19 @@ import {
   validateBodyOrParams,
   ValidatorDetails,
   writeContract,
-  XMTPv3Pipe,
+  HTTPPipe,
   Token,
   TimeoutError,
   stringifyJSON,
   generateCID,
   tryParseJSON,
   ProtocolDetails,
-  ProviderDetails,
   IndexerAgreement,
+  PipeMethods,
+  PipeResponseCodes,
 } from "@forest-protocols/sdk";
 import {
   Account,
-  Address,
   ContractFunctionExecutionError,
   ContractFunctionRevertedError,
   erc20Abi,
@@ -60,7 +58,6 @@ import { abortController } from "./signal";
 import { ResourceIsNotOnlineError } from "@/errors/ResourceIsNotOnlineError";
 import { chunked } from "@/utils/array";
 import { sleep } from "@/utils/sleep";
-import { join } from "path";
 import { isTermination } from "@/utils/is-termination";
 import { availableUploaders } from "./uploader";
 import { AbstractUploader } from "@/base/AbstractUploader";
@@ -74,7 +71,7 @@ export class Validator {
   registry!: Registry;
   protocol!: Protocol;
   token!: Token;
-  pipe!: XMTPv3Pipe;
+  pipe!: HTTPPipe;
   details!: ValidatorDetails;
   actorInfo!: Actor;
   usdc!: GetContractReturnType<typeof erc20Abi, PublicClient | WalletClient>;
@@ -814,7 +811,7 @@ export class Validator {
    */
   async waitResourceToBeOnline(
     agreementId: number,
-    operatorAddress: Address,
+    operatorEndpoint: string,
     sessionId = ""
   ): Promise<Resource> {
     const startTs = Date.now();
@@ -830,31 +827,28 @@ export class Validator {
       try {
         this.logger.debug(`Sending get Resource request`, {
           agreementId,
-          operatorAddress: operatorAddress.toLowerCase(),
+          operatorEndpoint,
           sessionId,
         });
 
         // Retrieve details of the Resource
-        const response = await this.pipe.send(operatorAddress, {
-          method: PipeMethod.GET,
+        const response = await this.pipe.send(operatorEndpoint, {
+          method: PipeMethods.GET,
           path: "/resources",
           params: {
             id: agreementId,
             pt: config.PROTOCOL_ADDRESS,
-
-            // TODO: Remove in the next versions, just for backward compatibility
-            pc: config.PROTOCOL_ADDRESS,
           },
           timeout: 15 * 1000,
         });
 
         this.logger.debug(`Get Resource request has been sent`, {
           agreementId,
-          operatorAddress: operatorAddress.toLowerCase(),
+          operatorEndpoint,
           sessionId,
         });
 
-        if (response.code != PipeResponseCode.OK) {
+        if (response.code != PipeResponseCodes.OK) {
           throw new PipeError(response.code, response.body);
         }
         const resource = response?.body;
@@ -862,11 +856,11 @@ export class Validator {
         if (resource) {
           if (resource.deploymentStatus === DeploymentStatus.Running) {
             this.logger.info(`Resource is online`, {
+              operatorEndpoint,
               agreementId,
-              operatorAddress: operatorAddress.toLowerCase(),
               sessionId,
             });
-            resource.operatorAddress = operatorAddress;
+            resource.operatorEndpoint = operatorEndpoint;
             return resource;
           } else if (resource.deploymentStatus === DeploymentStatus.Failed) {
             throw new Error(`Deployment of Resource ${resource.id} is failed`);
@@ -878,10 +872,10 @@ export class Validator {
         if (error instanceof PipeError) {
           // Ignore not found errors. We just need to wait a little bit more
           // until the Provider picks up the creation event from the blockchain
-          if (error.code !== PipeResponseCode.NOT_FOUND) {
+          if (error.code !== PipeResponseCodes.NOT_FOUND) {
             this.logger.warning(`Couldn't retrieve details of Agreement`, {
               agreementId,
-              operatorAddress: operatorAddress.toLowerCase(),
+              operatorEndpoint,
               sessionId,
               stacktrace: error.stack,
             });
@@ -1025,22 +1019,16 @@ export class Validator {
   private async initPipe(operatorPrivateKey: Hex) {
     // If there is no Pipe instance for this operator, instantiate one
     if (!pipes[this.actorInfo.operatorAddr]) {
-      this.pipe = new XMTPv3Pipe(operatorPrivateKey, {
+      const port = config.validatorConfigurations[this.tag].operatorPipePort;
+      this.pipe = new HTTPPipe(operatorPrivateKey, {
         signal: abortController.signal,
-        dbPath: join(
-          process.cwd(),
-          "data",
-          `db-${this.actorInfo.operatorAddr}.db`
-        ),
-
-        // Doesn't matter what it is as long as it is something that we can use in the next client initialization
-        encryptionKey: this.actorInfo.operatorAddr,
+        port,
       });
 
-      await this.pipe.init(config.NODE_ENV);
+      await this.pipe.init();
 
       // Setup routes
-      this.pipe.route(PipeMethod.GET, "/details", async (req) => {
+      this.pipe.route(PipeMethods.GET, "/details", async (req) => {
         this.logger.info(`Got Pipe request`, {
           id: req.id,
           method: req.method,
@@ -1052,22 +1040,26 @@ export class Validator {
         const files = await DB.getDetailFiles(body);
 
         if (files.length == 0) {
-          throw new PipeError(PipeResponseCode.NOT_FOUND, {
+          throw new PipeError(PipeResponseCodes.NOT_FOUND, {
             message: "Detail files are not found",
           });
         }
 
         return {
-          code: PipeResponseCode.OK,
+          code: PipeResponseCodes.OK,
           body: files.map((file) => file.content),
         };
       });
 
       if (!abortController.signal.aborted) {
-        this.logger.info(`Operator initialized`, {
+        this.logger.info(`Operator Pipe initialized`, {
           operatorAddress: this.actorInfo.operatorAddr.toLowerCase(),
+          port,
+          host: "0.0.0.0",
         });
       }
+
+      pipes[this.actorInfo.operatorAddr] = this.pipe;
     } else {
       this.pipe = pipes[this.actorInfo.operatorAddr];
     }
