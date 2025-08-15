@@ -53,6 +53,7 @@ export abstract class BaseValidationExecutor {
           },
           info.testResults.length > 0 ? info.testResults : [{isSuccess: false, raw: "Validation session failed", result: {}, testName: "Failed"} as TestResult]
         );
+        return true;
       } catch (err) {
         logError({
           err,
@@ -64,6 +65,8 @@ export abstract class BaseValidationExecutor {
         });
       }
     }
+
+    return false;
   }
 
   /**
@@ -81,12 +84,12 @@ export abstract class BaseValidationExecutor {
       }
       await this.saveTestResults(session.info, score);
     } catch (err) {
-        logError({
-          err,
-          logger: this.logger,
-          prefix: `Session results couldn't save to the database`,
-          meta: {
-            sessionId: session.id,
+      logError({
+        err,
+        logger: this.logger,
+        prefix: `Session results couldn't save to the database`,
+        meta: {
+          sessionId: session.id,
         },
       });
     }
