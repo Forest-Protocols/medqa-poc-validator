@@ -24,10 +24,10 @@ import {
   IndexerAgreement,
   PipeMethods,
   PipeResponseCodes,
+  searchError,
 } from "@forest-protocols/sdk";
 import {
   Account,
-  ContractFunctionExecutionError,
   ContractFunctionRevertedError,
   erc20Abi,
   formatUnits,
@@ -448,6 +448,8 @@ export class Validator {
               score: BigInt(validation.score),
             }));
 
+            let hash: Hex | undefined;
+
             try {
               // Sort the chunk to have consistent commitHash
               this.sortValidations(chunk);
@@ -457,7 +459,7 @@ export class Validator {
               });
 
               // Compute the hash of the chunk
-              const hash = await this.slasher.computeHash(mappedChunk);
+              hash = await this.slasher.computeHash(mappedChunk);
 
               // Get details link of the audit file data
               const { detailsLink, stringifiedData } =
@@ -492,6 +494,39 @@ export class Validator {
               if (isTermination(err)) {
                 // Re-throw for outer catch block
                 throw err;
+              }
+
+              // Search for revert error
+              const error = searchError(
+                "ContractFunctionRevertedError",
+                err
+              ) as ContractFunctionRevertedError;
+
+              if (error) {
+                // Check name of the error
+                if (error.data?.errorName === "CommitmentAlreadySubmitted") {
+                  this.logger.warning(
+                    `The hash is already committed to the blockchain`,
+                    { commitHash: hash }
+                  );
+
+                  if (hash) {
+                    // Save that commit hash to the related sessions since now we know
+                    // they are already submitted to the blockchain.
+                    await DB.setCommitHash(
+                      chunk.map((c) => c.sessionId),
+                      hash
+                    );
+                  } else {
+                    // Low possibility. If the execution branched above,
+                    // that means hash is already calculated. But we are
+                    // checking it for the sake of the type safety.
+                    this.logger.warning(`Hash is not available`, {
+                      chunk,
+                    });
+                  }
+                  return;
+                }
               }
 
               logError({
@@ -668,35 +703,53 @@ export class Validator {
               return;
             }
 
-            const error = ensureError(err);
+            // Search for revert error
+            const error = searchError(
+              "ContractFunctionRevertedError",
+              err
+            ) as ContractFunctionRevertedError;
 
-            /**
-             * TODO: This may not work as expected since smart contract may also throw "InvalidState" error rather than index out of bounds.
-             *
-             * If the error was thrown because we were too late to reveal
-             * the commit hash, then mark the commit hash as vanished so
-             * we won't try to reveal it again.
-             */
-            if (
-              error instanceof ContractFunctionExecutionError &&
-              error.cause instanceof ContractFunctionRevertedError &&
-              error.cause.reason?.includes("Array index is out of bounds")
-            ) {
-              this.logger.warning(
-                `The commit is vanished and cannot be revealed anymore, skipping...`,
-                { commitHash, count: validations.length }
-              );
-              await DB.markAsVanished(commitHash as Hex);
-            } else {
-              logError({
-                err: error,
-                logger: this.logger,
-                prefix: `Error while revealing the results`,
-                meta: {
-                  commitHash,
-                },
-              });
+            if (error) {
+              if (
+                [
+                  "ProviderDoesNotMatchAgreement",
+                  "ValidatorDoesNotMatchAgreement",
+                ].includes(error.data?.errorName || "")
+              ) {
+                this.logger.warning(
+                  `The commit has mismatched details and won't be revealed`,
+                  { commitHash, count: validations.length }
+                );
+
+                await DB.markAsUnrevealable(error.data!.errorName, commitHash);
+                continue;
+              } else if (
+                // We may also get index error in case if the commit is vanished
+                error.reason?.includes("Array index is out of bounds") ||
+                (error.data?.errorName === "InvalidState" &&
+                  error.data.args?.includes(2))
+              ) {
+                this.logger.warning(
+                  `The commit is vanished (not found in this Epoch) and won't be revealed`,
+                  { commitHash, count: validations.length }
+                );
+
+                await DB.markAsUnrevealable(
+                  `${error.data!.errorName}(${error.data?.args?.join(", ")})`,
+                  commitHash
+                );
+                continue;
+              }
             }
+
+            logError({
+              err: error,
+              logger: this.logger,
+              prefix: `Error while revealing the results`,
+              meta: {
+                commitHash,
+              },
+            });
           }
         }
       } catch (err) {

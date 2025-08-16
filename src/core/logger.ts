@@ -69,7 +69,15 @@ switch (config.LOG_TYPE) {
           levelColor(
             Object.entries(meta)
               .filter(([, value]) => value !== undefined)
-              .map(([key, value]) => `${key}=${value}`)
+              .map(([key, value]) => {
+                // Use JSON.stringify for the objects
+                let strValue = String(value);
+                if (typeof value === "object") {
+                  strValue = JSON.stringify(value);
+                }
+
+                return `${key}=${strValue}`;
+              })
               .join(" ")
           ),
         ];

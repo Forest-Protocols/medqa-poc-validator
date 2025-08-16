@@ -150,7 +150,7 @@ class DatabaseClient {
         and(
           isNull(schema.validationsTable.commitHash),
           eq(schema.validationsTable.validatorId, validatorId),
-          eq(schema.validationsTable.isVanished, false),
+          isNull(schema.validationsTable.commitError), // There shouldn't be a blocker error
           eq(schema.validationsTable.isRevealed, false)
         )
       )
@@ -159,7 +159,8 @@ class DatabaseClient {
 
   /**
    * Gets all the validations that are not revealed yet.
-   * Only gets the ones that already committed to the blockchain.
+   * Only gets the ones that are already committed to
+   * the blockchain and ready to reveal.
    */
   async getUnrevealedValidations(validatorId: number) {
     return await this.client
@@ -176,7 +177,7 @@ class DatabaseClient {
         and(
           isNotNull(schema.validationsTable.commitHash),
           eq(schema.validationsTable.isRevealed, false),
-          eq(schema.validationsTable.isVanished, false),
+          isNull(schema.validationsTable.revealError), // There shouldn't be a blocker error
           eq(schema.validationsTable.validatorId, validatorId)
         )
       )
@@ -198,7 +199,6 @@ class DatabaseClient {
         and(
           isNotNull(schema.validationsTable.commitHash),
           eq(schema.validationsTable.isRevealed, true),
-          eq(schema.validationsTable.isVanished, false),
           eq(schema.validationsTable.validatorId, validatorId)
         )
       )
@@ -280,23 +280,25 @@ class DatabaseClient {
           eq(schema.validationsTable.isRevealed, false),
           eq(schema.validationsTable.commitHash, commitHash)
         )
-      )
-      .returning();
+      );
   }
 
-  async markAsVanished(commitHash: Hex) {
+  async markAsUncommittable(errorMessage: string, sessionId: string) {
     await this.client
       .update(schema.validationsTable)
       .set({
-        isVanished: true,
+        commitError: errorMessage,
       })
-      .where(
-        and(
-          eq(schema.validationsTable.isVanished, false),
-          eq(schema.validationsTable.commitHash, commitHash)
-        )
-      )
-      .returning();
+      .where(eq(schema.validationsTable.sessionId, sessionId));
+  }
+
+  async markAsUnrevealable(errorMessage: string, commitHash: Hex | string) {
+    await this.client
+      .update(schema.validationsTable)
+      .set({
+        revealError: errorMessage,
+      })
+      .where(eq(schema.validationsTable.commitHash, commitHash as Hex));
   }
 
   /**

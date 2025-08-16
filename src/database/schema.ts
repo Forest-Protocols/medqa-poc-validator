@@ -47,8 +47,12 @@ export const validationsTable = pgTable("validations", {
   offerId: integer("offer_id").notNull(),
   providerId: integer("provider_id").notNull(),
   commitHash: varchar("commit_hash", { length: 70 }).$type<Hex>(),
+
   isRevealed: boolean("is_revealed").notNull().default(false),
-  isVanished: boolean("is_vanished").notNull().default(false),
+
+  // Vital errors that blocks the process
+  revealError: text("reveal_error"),
+  commitError: text("commit_error"),
 });
 relations(validationsTable, ({ many, one }) => ({
   testResults: many(testResultsTable),
