@@ -108,6 +108,6 @@ export class Validation extends BaseValidation {
         Authorization: `Bearer ${token}`,
       },
     });
-    this.prompts = response.data;
+    this.prompts = response.data.data;
   }
 }
